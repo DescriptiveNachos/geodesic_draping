@@ -19,6 +19,7 @@ if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
 endif()
 
 add_library(geodesic_draping
+  src/geometrycentral_adapter.cpp
   src/plotting.cpp
   src/seed_projection.cpp
   src/version.cpp)
@@ -74,6 +75,19 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
     PRIVATE
       GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
   add_test(NAME test_seed_projection COMMAND test_seed_projection)
+
+  add_executable(test_geometrycentral_adapter
+    tests/test_geometrycentral_adapter.cpp)
+  target_link_libraries(test_geometrycentral_adapter
+    PRIVATE
+      geodesic_draping)
+  target_include_directories(test_geometrycentral_adapter
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+  target_compile_definitions(test_geometrycentral_adapter
+    PRIVATE
+      GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+  add_test(NAME test_geometrycentral_adapter COMMAND test_geometrycentral_adapter)
 endif()
 
 if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)

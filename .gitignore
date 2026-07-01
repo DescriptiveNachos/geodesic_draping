@@ -2,3 +2,5 @@ build/
 .venv/
 __pycache__/
 *.py[cod]
+.polyscope.ini
+imgui.ini
