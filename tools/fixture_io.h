@@ -44,8 +44,43 @@ inline std::string arrayTextForKey(const std::string& text, const std::string& k
   throw std::runtime_error("unterminated array for JSON key " + key);
 }
 
-inline std::vector<double> numbersInArrayForKey(const std::string& text, const std::string& key) {
-  const std::string array = arrayTextForKey(text, key);
+inline std::vector<std::string> arrayTextsForKey(const std::string& text, const std::string& key) {
+  const std::string quotedKey = "\"" + key + "\"";
+  std::vector<std::string> arrays;
+  size_t searchPos = 0;
+  while (true) {
+    const size_t keyPos = text.find(quotedKey, searchPos);
+    if (keyPos == std::string::npos) {
+      break;
+    }
+    const size_t arrayStart = text.find('[', keyPos + quotedKey.size());
+    if (arrayStart == std::string::npos) {
+      throw std::runtime_error("missing array for JSON key " + key);
+    }
+
+    int depth = 0;
+    bool foundEnd = false;
+    for (size_t i = arrayStart; i < text.size(); ++i) {
+      if (text[i] == '[') {
+        ++depth;
+      } else if (text[i] == ']') {
+        --depth;
+        if (depth == 0) {
+          arrays.push_back(text.substr(arrayStart, i - arrayStart + 1));
+          searchPos = i + 1;
+          foundEnd = true;
+          break;
+        }
+      }
+    }
+    if (!foundEnd) {
+      throw std::runtime_error("unterminated array for JSON key " + key);
+    }
+  }
+  return arrays;
+}
+
+inline std::vector<double> numbersInArrayText(const std::string& array) {
   std::vector<double> values;
   const char* cursor = array.c_str();
   while (*cursor != '\0') {
@@ -57,6 +92,22 @@ inline std::vector<double> numbersInArrayForKey(const std::string& text, const s
     } else {
       ++cursor;
     }
+  }
+  return values;
+}
+
+inline std::vector<double> numbersInArrayForKey(const std::string& text, const std::string& key) {
+  return numbersInArrayText(arrayTextForKey(text, key));
+}
+
+inline std::vector<Vec3> vec3ArraysForKey(const std::string& text, const std::string& key) {
+  std::vector<Vec3> values;
+  for (const std::string& array : arrayTextsForKey(text, key)) {
+    const std::vector<double> numbers = numbersInArrayText(array);
+    if (numbers.size() != 3) {
+      throw std::runtime_error("expected 3 numbers in JSON array for key " + key);
+    }
+    values.emplace_back(numbers[0], numbers[1], numbers[2]);
   }
   return values;
 }
@@ -147,6 +198,10 @@ inline std::vector<Vec3> loadGoldenDirections(const std::filesystem::path& fixtu
     directions.emplace_back(values[i], values[i + 1], values[i + 2]);
   }
   return directions;
+}
+
+inline std::vector<Vec3> loadGoldenGeneratorLastPoints(const std::filesystem::path& fixtureDir) {
+  return vec3ArraysForKey(readText(fixtureDir / "golden.json"), "last_point");
 }
 
 } // namespace geodesic_draping::fixture_io
