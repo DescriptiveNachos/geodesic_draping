@@ -67,8 +67,25 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
   target_link_libraries(test_seed_projection
     PRIVATE
       geodesic_draping)
+  target_include_directories(test_seed_projection
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools)
   target_compile_definitions(test_seed_projection
     PRIVATE
       GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
   add_test(NAME test_seed_projection COMMAND test_seed_projection)
+endif()
+
+if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
+  add_executable(plot_seed_projection
+    tools/plot_seed_projection.cpp)
+  target_link_libraries(plot_seed_projection
+    PRIVATE
+      geodesic_draping)
+  target_include_directories(plot_seed_projection
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+  target_compile_definitions(plot_seed_projection
+    PRIVATE
+      GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
 endif()
