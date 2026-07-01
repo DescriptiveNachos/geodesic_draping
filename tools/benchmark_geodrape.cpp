@@ -53,6 +53,10 @@ struct ReferenceSummary {
   double solveMean = 0.0;
 };
 
+struct PrefactoredBenchmarkResult {
+  Summary solve;
+};
+
 double secondsSince(const Clock::time_point& start) {
   return std::chrono::duration<double>(Clock::now() - start).count();
 }
@@ -214,6 +218,43 @@ BenchmarkResult benchmark(const geodesic_draping::SurfaceMeshData& mesh,
   return summarizeRuns(std::move(runs));
 }
 
+PrefactoredBenchmarkResult benchmarkPrefactored(const geodesic_draping::SurfaceMeshData& mesh,
+                                                const geodesic_draping::Vec2& seedXY,
+                                                double angleDegrees,
+                                                bool fast,
+                                                int warmupRuns,
+                                                int measuredRuns) {
+  geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions());
+
+  for (int i = 0; i < warmupRuns; ++i) {
+    if (fast) {
+      const auto result = solver.solveFast(seedXY, angleDegrees);
+      (void)result;
+    } else {
+      const auto result = solver.solveComplete(seedXY, angleDegrees);
+      (void)result;
+    }
+  }
+
+  std::vector<double> solveSeconds;
+  solveSeconds.reserve(static_cast<size_t>(measuredRuns));
+  for (int i = 0; i < measuredRuns; ++i) {
+    const auto start = Clock::now();
+    if (fast) {
+      const auto result = solver.solveFast(seedXY, angleDegrees);
+      (void)result;
+    } else {
+      const auto result = solver.solveComplete(seedXY, angleDegrees);
+      (void)result;
+    }
+    solveSeconds.push_back(secondsSince(start));
+  }
+
+  PrefactoredBenchmarkResult result;
+  result.solve = summarize(std::move(solveSeconds));
+  return result;
+}
+
 double numberAfterKey(const std::string& text, const std::string& key, size_t startPos) {
   const std::string quotedKey = "\"" + key + "\"";
   const size_t keyPos = text.find(quotedKey, startPos);
@@ -266,6 +307,19 @@ void printPath(const std::string& fixtureName,
             << std::setw(12) << cpp.generators.mean
             << std::setw(12) << cpp.heat.mean
             << std::setw(12) << cpp.fields.mean
+            << "\n";
+}
+
+void printPrefactoredPath(const std::string& fixtureName,
+                          const std::string& pathName,
+                          const PrefactoredBenchmarkResult& result) {
+  std::cout << std::left << std::setw(13) << fixtureName
+            << std::setw(10) << pathName
+            << std::right << std::fixed << std::setprecision(6)
+            << std::setw(12) << result.solve.mean
+            << std::setw(12) << result.solve.median
+            << std::setw(12) << result.solve.min
+            << std::setw(12) << result.solve.max
             << "\n";
 }
 
@@ -336,6 +390,30 @@ int main(int argc, char** argv) {
       const BenchmarkResult fast = benchmark(mesh, seedXY, angleDegrees, true, warmupRuns, measuredRuns);
       printPath(fixtureName, "complete", complete, loadReferenceSummary(fixtureDir, "complete"));
       printPath(fixtureName, "fast", fast, loadReferenceSummary(fixtureDir, "fast"));
+    }
+
+    std::cout << "\nprefactored repeated solves (same GeoDrapeSolver, construction excluded)\n";
+    std::cout << std::left << std::setw(13) << "fixture"
+              << std::setw(10) << "path"
+              << std::right
+              << std::setw(12) << "solve_mean"
+              << std::setw(12) << "solve_med"
+              << std::setw(12) << "solve_min"
+              << std::setw(12) << "solve_max"
+              << "\n";
+
+    for (const std::string& fixtureName : fixtures) {
+      const std::filesystem::path fixtureDir = root / fixtureName;
+      const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
+      const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
+      const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
+
+      const PrefactoredBenchmarkResult complete =
+          benchmarkPrefactored(mesh, seedXY, angleDegrees, false, warmupRuns, measuredRuns);
+      const PrefactoredBenchmarkResult fast =
+          benchmarkPrefactored(mesh, seedXY, angleDegrees, true, warmupRuns, measuredRuns);
+      printPrefactoredPath(fixtureName, "complete", complete);
+      printPrefactoredPath(fixtureName, "fast", fast);
     }
     return 0;
   } catch (const std::exception& e) {
