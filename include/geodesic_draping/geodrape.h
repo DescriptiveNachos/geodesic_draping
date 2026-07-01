@@ -1,0 +1,27 @@
+#pragma once
+
+#include "geodesic_draping/field_processing.h"
+#include "geodesic_draping/generator_tracing.h"
+#include "geodesic_draping/signed_heat.h"
+
+#include <array>
+#include <vector>
+
+namespace geodesic_draping {
+
+struct CompleteDrapeResult {
+  SeedProjection seed;
+  std::array<Vec3, 4> directions;
+  std::array<GeneratorTrace, 4> generators;
+  SourceCurves sourceCurves;
+  std::array<std::vector<double>, 2> distances;
+  std::array<std::vector<Vec3>, 2> gradients;
+  std::vector<double> shearAnglesDegrees;
+};
+
+CompleteDrapeResult solveCompleteDrape(const SurfaceMeshData& mesh,
+                                       const Vec2& seedXY,
+                                       double angleDegrees,
+                                       const SignedHeatSolveOptions& heatOptions = {});
+
+} // namespace geodesic_draping
