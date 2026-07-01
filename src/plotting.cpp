@@ -68,4 +68,34 @@ void plotSeedProjectionStep(const SurfaceMeshData& mesh,
 #endif
 }
 
+void plotGeneratorTraces(const std::array<GeneratorTrace, 4>& traces,
+                         const ProjectionPlotOptions& options) {
+#if GEODESIC_DRAPING_HAS_POLYSCOPE
+  if (!polyscope::isInitialized()) {
+    polyscope::init();
+  }
+  if (options.clearExisting) {
+    polyscope::removeAllStructures();
+  }
+
+  for (size_t i = 0; i < traces.size(); ++i) {
+    std::vector<std::array<double, 3>> points;
+    points.reserve(traces[i].points.size());
+    for (const Vec3& point : traces[i].points) {
+      points.push_back({point.x(), point.y(), point.z()});
+    }
+    polyscope::registerCurveNetworkLine(options.name + " generator " + std::to_string(i), points);
+  }
+
+  if (options.show) {
+    polyscope::show();
+  }
+#else
+  (void)traces;
+  (void)options;
+  throw std::runtime_error(
+      "Polyscope plotting is disabled. Reconfigure with GEODESIC_DRAPING_ENABLE_POLYSCOPE=ON.");
+#endif
+}
+
 } // namespace geodesic_draping

@@ -131,6 +131,31 @@ inline double numberForKey(const std::string& text, const std::string& key) {
   return value;
 }
 
+inline std::vector<double> numbersForKey(const std::string& text, const std::string& key) {
+  const std::string quotedKey = "\"" + key + "\"";
+  std::vector<double> values;
+  size_t searchPos = 0;
+  while (true) {
+    const size_t keyPos = text.find(quotedKey, searchPos);
+    if (keyPos == std::string::npos) {
+      break;
+    }
+    const size_t colon = text.find(':', keyPos + quotedKey.size());
+    if (colon == std::string::npos) {
+      throw std::runtime_error("missing JSON value for key " + key);
+    }
+    const char* cursor = text.c_str() + colon + 1;
+    char* end = nullptr;
+    const double value = std::strtod(cursor, &end);
+    if (end == cursor) {
+      throw std::runtime_error("expected numeric JSON value for key " + key);
+    }
+    values.push_back(value);
+    searchPos = static_cast<size_t>(end - text.c_str());
+  }
+  return values;
+}
+
 inline SurfaceMeshData loadMesh(const std::filesystem::path& fixtureDir) {
   const std::string text = readText(fixtureDir / "mesh.json");
   const std::vector<double> vertexValues = numbersInArrayForKey(text, "vertices");
@@ -202,6 +227,18 @@ inline std::vector<Vec3> loadGoldenDirections(const std::filesystem::path& fixtu
 
 inline std::vector<Vec3> loadGoldenGeneratorLastPoints(const std::filesystem::path& fixtureDir) {
   return vec3ArraysForKey(readText(fixtureDir / "golden.json"), "last_point");
+}
+
+inline std::vector<size_t> loadGoldenGeneratorPointCounts(const std::filesystem::path& fixtureDir) {
+  const std::vector<double> values = numbersForKey(readText(fixtureDir / "golden.json"), "num_points");
+  std::vector<size_t> counts;
+  for (size_t i = 0; i < values.size() && i < 4; ++i) {
+    counts.push_back(static_cast<size_t>(values[i]));
+  }
+  if (counts.size() != 4) {
+    throw std::runtime_error("expected four generator num_points entries");
+  }
+  return counts;
 }
 
 } // namespace geodesic_draping::fixture_io

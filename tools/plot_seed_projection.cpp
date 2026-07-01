@@ -1,4 +1,6 @@
 #include "fixture_io.h"
+#include "geodesic_draping/generator_tracing.h"
+#include "geodesic_draping/geometrycentral_adapter.h"
 #include "geodesic_draping/plotting.h"
 #include "geodesic_draping/seed_projection.h"
 
@@ -73,11 +75,17 @@ int main(int argc, char** argv) {
     }
 
     const auto directions = geodesic_draping::generateOrthogonalDirections(angleDegrees);
+    auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
+    const auto traces = geodesic_draping::traceGenerators(surface, projection->surfacePoint, directions);
 
     const Vec3 goldenOrigin = geodesic_draping::fixture_io::loadGoldenOrigin(fixtureDir);
     const size_t goldenFaceIndex = geodesic_draping::fixture_io::loadGoldenSeedFaceIndex(fixtureDir);
     const Vec3 goldenBarycentric = geodesic_draping::fixture_io::loadGoldenSeedBarycentric(fixtureDir);
     const std::vector<Vec3> goldenDirections = geodesic_draping::fixture_io::loadGoldenDirections(fixtureDir);
+    const std::vector<Vec3> goldenGeneratorEnds =
+        geodesic_draping::fixture_io::loadGoldenGeneratorLastPoints(fixtureDir);
+    const std::vector<size_t> goldenGeneratorCounts =
+        geodesic_draping::fixture_io::loadGoldenGeneratorPointCounts(fixtureDir);
 
     std::cout << std::setprecision(17);
     std::cout << "Fixture: " << fixtureName << "\n"
@@ -100,14 +108,30 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < directions.size(); ++i) {
       printVectorComparison("direction " + std::to_string(i), directions[i], goldenDirections[i]);
     }
+    std::cout << "\n";
+
+    for (size_t i = 0; i < traces.size(); ++i) {
+      std::cout << "generator " << i
+                << " actual_points " << traces[i].points.size()
+                << "  golden_points " << goldenGeneratorCounts[i]
+                << "  hit_boundary " << (traces[i].hitBoundary ? "true" : "false")
+                << "  length " << traces[i].length << "\n";
+      printVectorComparison("  end", traces[i].points.back(), goldenGeneratorEnds[i]);
+    }
 
     ProjectionPlotOptions options;
     options.name = fixtureName + " seed projection";
     options.directionLength = directionLength;
     options.clearExisting = true;
-    options.show = show;
+    options.show = false;
 
     geodesic_draping::plotSeedProjectionStep(mesh, *projection, directions, options);
+
+    ProjectionPlotOptions traceOptions;
+    traceOptions.name = fixtureName;
+    traceOptions.clearExisting = false;
+    traceOptions.show = show;
+    geodesic_draping::plotGeneratorTraces(traces, traceOptions);
 
     if (!show) {
       std::cout << "\nPlot data registered with Polyscope, but --no-show was set.\n";
