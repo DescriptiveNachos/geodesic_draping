@@ -173,3 +173,15 @@ if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
     PRIVATE
       GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
 endif()
+
+add_executable(benchmark_geodrape
+  tools/benchmark_geodrape.cpp)
+target_link_libraries(benchmark_geodrape
+  PRIVATE
+    geodesic_draping)
+target_include_directories(benchmark_geodrape
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+target_compile_definitions(benchmark_geodrape
+  PRIVATE
+    GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
