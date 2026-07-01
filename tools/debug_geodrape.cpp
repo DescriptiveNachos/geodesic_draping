@@ -16,6 +16,7 @@
 namespace {
 
 using geodesic_draping::CompleteDrapeResult;
+using geodesic_draping::FastDrapeResult;
 using geodesic_draping::ProjectionPlotOptions;
 using geodesic_draping::Vec3;
 
@@ -90,6 +91,20 @@ void printScalarComparison(const std::string& label,
             << "  max_abs_diff " << maxAbsDiff(actual, golden) << "\n";
 }
 
+void printVectorArrayComparison(const std::string& label,
+                                const std::vector<Vec3>& actual,
+                                const std::vector<Vec3>& golden) {
+  const size_t n = std::min(actual.size(), golden.size());
+  double diff = 0.0;
+  for (size_t i = 0; i < n; ++i) {
+    diff = std::max(diff, maxAbsDiff(actual[i], golden[i]));
+  }
+  std::cout << std::left << std::setw(18) << label
+            << " actual_n " << actual.size()
+            << "  golden_n " << golden.size()
+            << "  max_abs_diff " << diff << "\n";
+}
+
 geodesic_draping::SignedHeatSolveOptions fixtureHeatOptions() {
   geodesic_draping::SignedHeatSolveOptions options;
   options.preserveSourceNormals = false;
@@ -131,8 +146,11 @@ int main(int argc, char** argv) {
     const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
     const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
     const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
+    const auto heatOptions = fixtureHeatOptions();
     const CompleteDrapeResult result =
-        geodesic_draping::solveCompleteDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions());
+        geodesic_draping::solveCompleteDrape(mesh, seedXY, angleDegrees, heatOptions);
+    const FastDrapeResult fastResult =
+        geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, heatOptions);
 
     const Vec3 goldenOrigin = geodesic_draping::fixture_io::loadGoldenOrigin(fixtureDir);
     const size_t goldenFaceIndex = geodesic_draping::fixture_io::loadGoldenSeedFaceIndex(fixtureDir);
@@ -195,13 +213,24 @@ int main(int argc, char** argv) {
     printScalarComparison("shear",
                           result.shearAnglesDegrees,
                           geodesic_draping::fixture_io::loadGoldenShearArray(fixtureDir, "complete"));
+    std::cout << "\n";
+    printStats("fast_shear", fastResult.shearAnglesDegrees);
+    printVectorArrayComparison("fast grad_0",
+                               fastResult.gradients[0],
+                               geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_0"));
+    printVectorArrayComparison("fast grad_1",
+                               fastResult.gradients[1],
+                               geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_1"));
+    printScalarComparison("fast shear",
+                          fastResult.shearAnglesDegrees,
+                          geodesic_draping::fixture_io::loadGoldenShearArray(fixtureDir, "fast"));
 
     ProjectionPlotOptions options;
-    options.name = fixtureName + " complete drape";
+    options.name = fixtureName + " drape comparison";
     options.directionLength = directionLength;
     options.clearExisting = true;
     options.show = show;
-    geodesic_draping::plotCompleteDrapeResult(mesh, result, options);
+    geodesic_draping::plotDrapeComparisonResult(mesh, result, fastResult, options);
 
     if (!show) {
       std::cout << "\nPlot data registered with Polyscope, but --no-show was set.\n";

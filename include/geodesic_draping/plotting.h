@@ -28,4 +28,9 @@ void plotCompleteDrapeResult(const SurfaceMeshData& mesh,
                              const CompleteDrapeResult& result,
                              const ProjectionPlotOptions& options = {});
 
+void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
+                               const CompleteDrapeResult& completeResult,
+                               const FastDrapeResult& fastResult,
+                               const ProjectionPlotOptions& options = {});
+
 } // namespace geodesic_draping
