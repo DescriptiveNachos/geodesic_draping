@@ -27,6 +27,21 @@ void requireNearArray(const std::vector<double>& actual,
   }
 }
 
+void requireNearVectorArray(const std::vector<geodesic_draping::Vec3>& actual,
+                            const std::vector<geodesic_draping::Vec3>& golden,
+                            double tolerance,
+                            const std::string& label) {
+  assert(actual.size() == golden.size());
+  double maxDiff = 0.0;
+  for (size_t i = 0; i < actual.size(); ++i) {
+    maxDiff = std::max(maxDiff, (actual[i] - golden[i]).cwiseAbs().maxCoeff());
+  }
+  if (maxDiff > tolerance) {
+    std::cerr << label << " max diff " << maxDiff << " exceeds tolerance " << tolerance << "\n";
+    assert(false);
+  }
+}
+
 void testFixture(const std::filesystem::path& root, const std::string& name) {
   const std::filesystem::path fixtureDir = root / name;
 
@@ -47,6 +62,20 @@ void testFixture(const std::filesystem::path& root, const std::string& name) {
                    name + " fast shear");
 }
 
+void testGradientFixture(const std::filesystem::path& root,
+                         const std::string& name,
+                         double tolerance) {
+  const std::filesystem::path fixtureDir = root / name;
+  const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
+  const auto gradients = geodesic_draping::computeVertexScalarGradients(
+      mesh,
+      geodesic_draping::fixture_io::loadGoldenScalarArray(fixtureDir, "dist_0"));
+  requireNearVectorArray(gradients,
+                         geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "complete", "grad_0"),
+                         tolerance,
+                         name + " grad_0");
+}
+
 } // namespace
 
 int main() {
@@ -54,5 +83,8 @@ int main() {
   testFixture(fixtureRoot, "tiny_planar");
   testFixture(fixtureRoot, "small_curved");
   testFixture(fixtureRoot, "demo_part");
+  testGradientFixture(fixtureRoot, "tiny_planar", 1e-12);
+  testGradientFixture(fixtureRoot, "small_curved", 2e-3);
+  testGradientFixture(fixtureRoot, "demo_part", 1e-1);
   return 0;
 }
