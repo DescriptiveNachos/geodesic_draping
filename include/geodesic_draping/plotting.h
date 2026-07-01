@@ -1,6 +1,7 @@
 #pragma once
 
 #include "geodesic_draping/generator_tracing.h"
+#include "geodesic_draping/geodrape.h"
 #include "geodesic_draping/seed_projection.h"
 
 #include <array>
@@ -22,5 +23,9 @@ void plotSeedProjectionStep(const SurfaceMeshData& mesh,
 
 void plotGeneratorTraces(const std::array<GeneratorTrace, 4>& traces,
                          const ProjectionPlotOptions& options = {});
+
+void plotCompleteDrapeResult(const SurfaceMeshData& mesh,
+                             const CompleteDrapeResult& result,
+                             const ProjectionPlotOptions& options = {});
 
 } // namespace geodesic_draping

@@ -147,15 +147,15 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
 endif()
 
 if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
-  add_executable(plot_seed_projection
-    tools/plot_seed_projection.cpp)
-  target_link_libraries(plot_seed_projection
+  add_executable(debug_geodrape
+    tools/debug_geodrape.cpp)
+  target_link_libraries(debug_geodrape
     PRIVATE
       geodesic_draping)
-  target_include_directories(plot_seed_projection
+  target_include_directories(debug_geodrape
     PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/tools)
-  target_compile_definitions(plot_seed_projection
+  target_compile_definitions(debug_geodrape
     PRIVATE
       GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
 endif()
