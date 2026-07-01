@@ -19,6 +19,7 @@ if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
 endif()
 
 add_library(geodesic_draping
+  src/field_processing.cpp
   src/geometrycentral_adapter.cpp
   src/generator_tracing.cpp
   src/plotting.cpp
@@ -116,6 +117,19 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
     PRIVATE
       GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
   add_test(NAME test_signed_heat COMMAND test_signed_heat)
+
+  add_executable(test_field_processing
+    tests/test_field_processing.cpp)
+  target_link_libraries(test_field_processing
+    PRIVATE
+      geodesic_draping)
+  target_include_directories(test_field_processing
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+  target_compile_definitions(test_field_processing
+    PRIVATE
+      GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+  add_test(NAME test_field_processing COMMAND test_field_processing)
 endif()
 
 if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)

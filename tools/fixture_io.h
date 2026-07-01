@@ -44,6 +44,31 @@ inline std::string arrayTextForKey(const std::string& text, const std::string& k
   throw std::runtime_error("unterminated array for JSON key " + key);
 }
 
+inline std::string objectTextForKey(const std::string& text, const std::string& key) {
+  const std::string quotedKey = "\"" + key + "\"";
+  const size_t keyPos = text.find(quotedKey);
+  if (keyPos == std::string::npos) {
+    throw std::runtime_error("missing JSON key " + key);
+  }
+  const size_t objectStart = text.find('{', keyPos + quotedKey.size());
+  if (objectStart == std::string::npos) {
+    throw std::runtime_error("missing object for JSON key " + key);
+  }
+
+  int depth = 0;
+  for (size_t i = objectStart; i < text.size(); ++i) {
+    if (text[i] == '{') {
+      ++depth;
+    } else if (text[i] == '}') {
+      --depth;
+      if (depth == 0) {
+        return text.substr(objectStart, i - objectStart + 1);
+      }
+    }
+  }
+  throw std::runtime_error("unterminated object for JSON key " + key);
+}
+
 inline std::vector<std::string> arrayTextsForKey(const std::string& text, const std::string& key) {
   const std::string quotedKey = "\"" + key + "\"";
   std::vector<std::string> arrays;
@@ -255,6 +280,42 @@ inline std::vector<size_t> loadGoldenPairedGeneratorPointCounts(const std::files
 inline std::vector<double> loadGoldenScalarArray(const std::filesystem::path& fixtureDir,
                                                  const std::string& key) {
   return numbersInArrayForKey(readText(fixtureDir / "golden.json"), key);
+}
+
+inline std::vector<Vec3> loadGoldenVectorArray(const std::filesystem::path& fixtureDir,
+                                               const std::string& key) {
+  const std::vector<double> values = numbersInArrayForKey(readText(fixtureDir / "golden.json"), key);
+  if (values.size() % 3 != 0) {
+    throw std::runtime_error("expected vector array triples for key " + key);
+  }
+  std::vector<Vec3> vectors;
+  vectors.reserve(values.size() / 3);
+  for (size_t i = 0; i < values.size(); i += 3) {
+    vectors.emplace_back(values[i], values[i + 1], values[i + 2]);
+  }
+  return vectors;
+}
+
+inline std::vector<Vec3> loadGoldenVectorArray(const std::filesystem::path& fixtureDir,
+                                               const std::string& section,
+                                               const std::string& key) {
+  const std::string sectionText = objectTextForKey(readText(fixtureDir / "golden.json"), section);
+  const std::vector<double> values = numbersInArrayForKey(sectionText, key);
+  if (values.size() % 3 != 0) {
+    throw std::runtime_error("expected vector array triples for key " + section + "." + key);
+  }
+  std::vector<Vec3> vectors;
+  vectors.reserve(values.size() / 3);
+  for (size_t i = 0; i < values.size(); i += 3) {
+    vectors.emplace_back(values[i], values[i + 1], values[i + 2]);
+  }
+  return vectors;
+}
+
+inline std::vector<double> loadGoldenShearArray(const std::filesystem::path& fixtureDir,
+                                                const std::string& key) {
+  const std::string sectionText = objectTextForKey(readText(fixtureDir / "golden.json"), "shear");
+  return numbersInArrayForKey(sectionText, key);
 }
 
 } // namespace geodesic_draping::fixture_io
