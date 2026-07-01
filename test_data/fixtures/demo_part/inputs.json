@@ -1,0 +1,13 @@
+{
+  "seed_xy": [
+    0.0,
+    0.0
+  ],
+  "angle_degrees": 20.0,
+  "solver_options": {
+    "pres_norm": false,
+    "lvl_set_const": "None",
+    "soft_lvl_wt": -1
+  },
+  "source": "demo_part.stl"
+}
