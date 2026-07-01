@@ -25,9 +25,25 @@ struct FastDrapeResult {
   std::array<Vec3, 4> directions;
   std::array<GeneratorTrace, 4> generators;
   SourceCurves sourceCurves;
-  std::array<SignedVectorHeatResult, 2> heatVectorSolves;
+  std::array<CustomSignedHeatResult, 2> customHeatSolves;
   std::array<std::vector<Vec3>, 2> gradients;
   std::vector<double> shearAnglesDegrees;
+};
+
+class GeoDrapeSolver {
+public:
+  explicit GeoDrapeSolver(SurfaceMeshData meshData,
+                          const SignedHeatSolveOptions& heatOptions = {});
+
+  CompleteDrapeResult solveComplete(const Vec2& seedXY, double angleDegrees);
+  FastDrapeResult solveFast(const Vec2& seedXY, double angleDegrees);
+
+private:
+  SurfaceMeshData meshData_;
+  GeometryCentralSurface surface_;
+  SignedHeatSolveOptions heatOptions_;
+  SignedHeatDistanceSolver distanceSolver_;
+  CustomSignedHeatSolver customHeatSolver_;
 };
 
 CompleteDrapeResult solveCompleteDrape(const SurfaceMeshData& mesh,

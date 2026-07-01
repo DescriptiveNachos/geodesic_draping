@@ -110,6 +110,9 @@ StepTimings runCompleteOnce(const geodesic_draping::SurfaceMeshData& mesh,
   StepTimings timings;
   const auto constructStart = Clock::now();
   auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
+  geodesic_draping::SignedHeatDistanceSolver distanceSolver(
+      surface,
+      fixtureHeatOptions().diffusionTimeCoefficient);
   timings.constructSeconds = secondsSince(constructStart);
 
   const auto solveStart = Clock::now();
@@ -127,7 +130,7 @@ StepTimings runCompleteOnce(const geodesic_draping::SurfaceMeshData& mesh,
   timings.generatorsSeconds = secondsSince(phaseStart);
 
   phaseStart = Clock::now();
-  const auto distances = geodesic_draping::computeSignedHeatDistances(surface, sourceCurves, fixtureHeatOptions());
+  const auto distances = distanceSolver.computeDistances(sourceCurves, fixtureHeatOptions());
   timings.heatSeconds = secondsSince(phaseStart);
 
   phaseStart = Clock::now();
@@ -148,6 +151,9 @@ StepTimings runFastOnce(const geodesic_draping::SurfaceMeshData& mesh,
   StepTimings timings;
   const auto constructStart = Clock::now();
   auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
+  geodesic_draping::CustomSignedHeatSolver customHeatSolver(
+      surface,
+      fixtureHeatOptions().diffusionTimeCoefficient);
   timings.constructSeconds = secondsSince(constructStart);
 
   const auto solveStart = Clock::now();
@@ -165,11 +171,18 @@ StepTimings runFastOnce(const geodesic_draping::SurfaceMeshData& mesh,
   timings.generatorsSeconds = secondsSince(phaseStart);
 
   phaseStart = Clock::now();
-  const auto heats = geodesic_draping::computeSignedVectorHeats(surface, sourceCurves, fixtureHeatOptions());
+  std::array<geodesic_draping::CustomSignedHeatResult, 2> heats;
+  for (size_t i = 0; i < heats.size(); ++i) {
+    heats[i].diffusion = customHeatSolver.solveDiffusedEdgeHeatField(sourceCurves.curves[i], fixtureHeatOptions());
+    heats[i].normalizedFaceDirections =
+        geodesic_draping::sampleAndNormalizeFaceDirections(surface, heats[i].diffusion.diffusedEdgeHeatField);
+    heats[i].vertexDirections =
+        geodesic_draping::averageFaceDirectionsToVerticesReference(surface, heats[i].normalizedFaceDirections);
+  }
   timings.heatSeconds = secondsSince(phaseStart);
 
   phaseStart = Clock::now();
-  const auto shear = geodesic_draping::computeShearAnglesDegrees(heats[0].vertexVectorHeat, heats[1].vertexVectorHeat);
+  const auto shear = geodesic_draping::computeShearAnglesDegrees(heats[0].vertexDirections, heats[1].vertexDirections);
   (void)shear;
   timings.fieldsSeconds = secondsSince(phaseStart);
 

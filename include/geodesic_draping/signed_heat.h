@@ -34,4 +34,19 @@ std::array<std::vector<double>, 2> computeSignedHeatDistances(GeometryCentralSur
                                                               const SourceCurves& sourceCurves,
                                                               const SignedHeatSolveOptions& options = {});
 
+class SignedHeatDistanceSolver {
+public:
+  SignedHeatDistanceSolver(GeometryCentralSurface& surface, double diffusionTimeCoefficient = 1.0);
+
+  std::vector<double> computeDistance(const std::vector<SurfaceReference>& sourceCurve,
+                                      const SignedHeatSolveOptions& options = {});
+
+  std::array<std::vector<double>, 2> computeDistances(const SourceCurves& sourceCurves,
+                                                      const SignedHeatSolveOptions& options = {});
+
+private:
+  geometrycentral::surface::SurfaceMesh& mesh_;
+  geometrycentral::surface::SignedHeatSolver solver_;
+};
+
 } // namespace geodesic_draping

@@ -9,26 +9,26 @@
 
 namespace geodesic_draping {
 
-using EdgeVectorHeat = std::vector<std::complex<double>>;
-using FaceVectorHeat = std::vector<Vec3>;
+using EdgeHeatField = std::vector<std::complex<double>>;
+using FaceHeatDirectionField = std::vector<Vec3>;
 
-struct DiffusedVectorHeatResult {
+struct DiffusedHeatFieldResult {
   std::vector<std::vector<SurfaceReference>> preprocessedSourceCurves;
-  EdgeVectorHeat sourceEdgeVectorHeat;
-  EdgeVectorHeat diffusedEdgeVectorHeat;
+  EdgeHeatField sourceEdgeHeatField;
+  EdgeHeatField diffusedEdgeHeatField;
 };
 
-struct SignedVectorHeatResult {
-  DiffusedVectorHeatResult diffusion;
-  FaceVectorHeat normalizedFaceVectorHeat;
-  std::vector<Vec3> vertexVectorHeat;
+struct CustomSignedHeatResult {
+  DiffusedHeatFieldResult diffusion;
+  FaceHeatDirectionField normalizedFaceDirections;
+  std::vector<Vec3> vertexDirections;
 };
 
-class SignedVectorHeatSolver {
+class CustomSignedHeatSolver {
 public:
-  SignedVectorHeatSolver(GeometryCentralSurface& surface, double diffusionTimeCoefficient = 1.0);
+  CustomSignedHeatSolver(GeometryCentralSurface& surface, double diffusionTimeCoefficient = 1.0);
 
-  DiffusedVectorHeatResult solveDiffusedEdgeVectorHeat(
+  DiffusedHeatFieldResult solveDiffusedEdgeHeatField(
       const std::vector<SurfaceReference>& sourceCurve,
       const SignedHeatSolveOptions& options = {});
 
@@ -43,23 +43,23 @@ private:
   geometrycentral::SparseMatrix<double> doubleMassMatrix_;
   geometrycentral::SparseMatrix<double> doubleConnectionLaplacian_;
   geometrycentral::SparseMatrix<double> doubleVectorOperator_;
-  std::unique_ptr<geometrycentral::LinearSolver<std::complex<double>>> vectorHeatSolver_;
+  std::unique_ptr<geometrycentral::LinearSolver<std::complex<double>>> heatFieldSolver_;
 
   std::vector<geometrycentral::surface::Curve> preprocessCurves(
       const std::vector<geometrycentral::surface::Curve>& curves) const;
-  EdgeVectorHeat buildSourceEdgeVectorHeat(
+  EdgeHeatField buildSourceEdgeHeatField(
       const std::vector<geometrycentral::surface::Curve>& curves) const;
-  EdgeVectorHeat diffuseEdgeVectorHeat(
-      const EdgeVectorHeat& sourceEdgeVectorHeat,
+  EdgeHeatField diffuseEdgeHeatField(
+      const EdgeHeatField& sourceEdgeHeatField,
       const std::vector<geometrycentral::surface::Curve>& curves,
       const SignedHeatSolveOptions& options);
 
-  void ensureHaveVectorHeatSolver();
+  void ensureHaveHeatFieldSolver();
   geometrycentral::SparseMatrix<double> buildCrouzeixRaviartDoubleConnectionLaplacian() const;
   geometrycentral::SparseMatrix<double> buildCrouzeixRaviartDoubleMassMatrix() const;
 
   void buildSignedCurveSource(const geometrycentral::surface::Curve& curve,
-                              EdgeVectorHeat& sourceEdgeVectorHeat) const;
+                              EdgeHeatField& sourceEdgeHeatField) const;
   double lengthOfSegment(const geometrycentral::surface::SurfacePoint& pA,
                          const geometrycentral::surface::SurfacePoint& pB) const;
   geometrycentral::surface::SurfacePoint midSegmentSurfacePoint(
@@ -72,19 +72,19 @@ private:
                                const geometrycentral::surface::Edge& edge) const;
 };
 
-FaceVectorHeat sampleAndNormalizeFaceVectorHeat(GeometryCentralSurface& surface,
-                                                const EdgeVectorHeat& diffusedEdgeVectorHeat);
+FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& surface,
+                                                        const EdgeHeatField& diffusedEdgeHeatField);
 
-std::vector<Vec3> averageNormalizedFaceVectorHeatToVerticesReference(
+std::vector<Vec3> averageFaceDirectionsToVerticesReference(
     GeometryCentralSurface& surface,
-    const FaceVectorHeat& normalizedFaceVectorHeat);
+    const FaceHeatDirectionField& normalizedFaceDirections);
 
-SignedVectorHeatResult computeSignedVectorHeat(GeometryCentralSurface& surface,
-                                               const std::vector<SurfaceReference>& sourceCurve,
-                                               const SignedHeatSolveOptions& options = {});
+CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
+                                                         const std::vector<SurfaceReference>& sourceCurve,
+                                                         const SignedHeatSolveOptions& options = {});
 
-std::array<SignedVectorHeatResult, 2> computeSignedVectorHeats(GeometryCentralSurface& surface,
-                                                               const SourceCurves& sourceCurves,
-                                                               const SignedHeatSolveOptions& options = {});
+std::array<CustomSignedHeatResult, 2> computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
+                                                                        const SourceCurves& sourceCurves,
+                                                                        const SignedHeatSolveOptions& options = {});
 
 } // namespace geodesic_draping

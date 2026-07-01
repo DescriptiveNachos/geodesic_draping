@@ -62,6 +62,21 @@ geodesic_draping::CompleteDrapeResult solveFixture(const std::filesystem::path& 
       fixtureHeatOptions());
 }
 
+void testPersistentSolver(const std::filesystem::path& root, const std::string& name) {
+  const std::filesystem::path fixtureDir = root / name;
+  geodesic_draping::GeoDrapeSolver solver(
+      geodesic_draping::fixture_io::loadMesh(fixtureDir),
+      fixtureHeatOptions());
+  const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
+  const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
+
+  const auto first = solver.solveComplete(seedXY, angleDegrees);
+  const auto second = solver.solveComplete(seedXY, angleDegrees);
+  requireNearArray(second.distances[0], first.distances[0], 1e-12, name + " persistent complete dist_0");
+  requireNearArray(second.distances[1], first.distances[1], 1e-12, name + " persistent complete dist_1");
+  requireNearArray(second.shearAnglesDegrees, first.shearAnglesDegrees, 1e-12, name + " persistent complete shear");
+}
+
 } // namespace
 
 int main() {
@@ -87,6 +102,7 @@ int main() {
 
   const auto demo = solveFixture(fixtureRoot, "demo_part");
   requireFinite(demo, geodesic_draping::fixture_io::loadMesh(fixtureRoot / "demo_part").vertices.size());
+  testPersistentSolver(fixtureRoot, "demo_part");
 
   return 0;
 }

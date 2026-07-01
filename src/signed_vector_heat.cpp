@@ -11,7 +11,7 @@ namespace gcs = geometrycentral::surface;
 
 namespace {
 
-gc::Vector<std::complex<double>> toEigenVector(const EdgeVectorHeat& values) {
+gc::Vector<std::complex<double>> toEigenVector(const EdgeHeatField& values) {
   gc::Vector<std::complex<double>> out(values.size());
   for (size_t i = 0; i < values.size(); ++i) {
     out[static_cast<Eigen::Index>(i)] = values[i];
@@ -19,8 +19,8 @@ gc::Vector<std::complex<double>> toEigenVector(const EdgeVectorHeat& values) {
   return out;
 }
 
-EdgeVectorHeat toStdVector(const gc::Vector<std::complex<double>>& values) {
-  EdgeVectorHeat out(static_cast<size_t>(values.rows()));
+EdgeHeatField toStdVector(const gc::Vector<std::complex<double>>& values) {
+  EdgeHeatField out(static_cast<size_t>(values.rows()));
   for (Eigen::Index i = 0; i < values.rows(); ++i) {
     out[static_cast<size_t>(i)] = values[i];
   }
@@ -44,11 +44,25 @@ Eigen::Index eigenIndex(size_t value) {
   return static_cast<Eigen::Index>(value);
 }
 
+gcs::SurfaceMesh& requireMesh(GeometryCentralSurface& surface) {
+  if (!surface.mesh) {
+    throw std::runtime_error("CustomSignedHeatSolver requires a valid geometry-central mesh");
+  }
+  return *surface.mesh;
+}
+
+gcs::IntrinsicGeometryInterface& requireGeometry(GeometryCentralSurface& surface) {
+  if (!surface.geometry) {
+    throw std::runtime_error("CustomSignedHeatSolver requires a valid geometry-central geometry");
+  }
+  return *surface.geometry;
+}
+
 } // namespace
 
-SignedVectorHeatSolver::SignedVectorHeatSolver(GeometryCentralSurface& surface,
+CustomSignedHeatSolver::CustomSignedHeatSolver(GeometryCentralSurface& surface,
                                                double diffusionTimeCoefficient)
-    : mesh_(*surface.mesh), geometry_(*surface.geometry) {
+    : mesh_(requireMesh(surface)), geometry_(requireGeometry(surface)) {
   geometry_.requireEdgeLengths();
   geometry_.requireCrouzeixRaviartMassMatrix();
 
@@ -69,24 +83,24 @@ SignedVectorHeatSolver::SignedVectorHeatSolver(GeometryCentralSurface& surface,
   geometry_.unrequireEdgeLengths();
 }
 
-DiffusedVectorHeatResult SignedVectorHeatSolver::solveDiffusedEdgeVectorHeat(
+DiffusedHeatFieldResult CustomSignedHeatSolver::solveDiffusedEdgeHeatField(
     const std::vector<SurfaceReference>& sourceCurve,
     const SignedHeatSolveOptions& options) {
   gcs::Curve curve = toGeometryCentralCurve(mesh_, sourceCurve, true);
   const std::vector<gcs::Curve> preprocessedCurves = preprocessCurves({curve});
 
-  DiffusedVectorHeatResult result;
+  DiffusedHeatFieldResult result;
   result.preprocessedSourceCurves.reserve(preprocessedCurves.size());
   for (const gcs::Curve& preprocessedCurve : preprocessedCurves) {
     result.preprocessedSourceCurves.push_back(toSurfaceReferences(preprocessedCurve));
   }
-  result.sourceEdgeVectorHeat = buildSourceEdgeVectorHeat(preprocessedCurves);
-  result.diffusedEdgeVectorHeat =
-      diffuseEdgeVectorHeat(result.sourceEdgeVectorHeat, preprocessedCurves, options);
+  result.sourceEdgeHeatField = buildSourceEdgeHeatField(preprocessedCurves);
+  result.diffusedEdgeHeatField =
+      diffuseEdgeHeatField(result.sourceEdgeHeatField, preprocessedCurves, options);
   return result;
 }
 
-std::vector<gcs::Curve> SignedVectorHeatSolver::preprocessCurves(
+std::vector<gcs::Curve> CustomSignedHeatSolver::preprocessCurves(
     const std::vector<gcs::Curve>& curves) const {
   std::vector<gcs::Curve> newCurves;
   for (const gcs::Curve& curve : curves) {
@@ -110,13 +124,13 @@ std::vector<gcs::Curve> SignedVectorHeatSolver::preprocessCurves(
   return newCurves;
 }
 
-EdgeVectorHeat SignedVectorHeatSolver::buildSourceEdgeVectorHeat(
+EdgeHeatField CustomSignedHeatSolver::buildSourceEdgeHeatField(
     const std::vector<gcs::Curve>& curves) const {
   geometry_.requireEdgeIndices();
-  EdgeVectorHeat source(mesh_.nEdges(), std::complex<double>(0.0, 0.0));
+  EdgeHeatField source(mesh_.nEdges(), std::complex<double>(0.0, 0.0));
   for (const gcs::Curve& curve : curves) {
     if (!curve.isSigned) {
-      throw std::runtime_error("unsigned source curves are not implemented in SignedVectorHeatSolver");
+      throw std::runtime_error("unsigned source curves are not implemented in CustomSignedHeatSolver");
     }
     buildSignedCurveSource(curve, source);
   }
@@ -124,18 +138,18 @@ EdgeVectorHeat SignedVectorHeatSolver::buildSourceEdgeVectorHeat(
   return source;
 }
 
-EdgeVectorHeat SignedVectorHeatSolver::diffuseEdgeVectorHeat(
-    const EdgeVectorHeat& sourceEdgeVectorHeat,
+EdgeHeatField CustomSignedHeatSolver::diffuseEdgeHeatField(
+    const EdgeHeatField& sourceEdgeHeatField,
     const std::vector<gcs::Curve>& curves,
     const SignedHeatSolveOptions& options) {
-  ensureHaveVectorHeatSolver();
+  ensureHaveHeatFieldSolver();
 
   const size_t E = mesh_.nEdges();
-  const gc::Vector<std::complex<double>> source = toEigenVector(sourceEdgeVectorHeat);
+  const gc::Vector<std::complex<double>> source = toEigenVector(sourceEdgeHeatField);
   gc::Vector<std::complex<double>> diffused;
 
   if (!options.preserveSourceNormals) {
-    diffused = vectorHeatSolver_->solve(source);
+    diffused = heatFieldSolver_->solve(source);
     return toStdVector(diffused);
   }
 
@@ -204,8 +218,8 @@ EdgeVectorHeat SignedVectorHeatSolver::diffuseEdgeVectorHeat(
   return toStdVector(diffused);
 }
 
-void SignedVectorHeatSolver::ensureHaveVectorHeatSolver() {
-  if (vectorHeatSolver_) {
+void CustomSignedHeatSolver::ensureHaveHeatFieldSolver() {
+  if (heatFieldSolver_) {
     return;
   }
 
@@ -226,13 +240,13 @@ void SignedVectorHeatSolver::ensureHaveVectorHeatSolver() {
   geometry_.unrequireEdgeCotanWeights();
 
   if (isDelaunay) {
-    vectorHeatSolver_.reset(new gc::PositiveDefiniteSolver<std::complex<double>>(vectorOperator));
+    heatFieldSolver_.reset(new gc::PositiveDefiniteSolver<std::complex<double>>(vectorOperator));
   } else {
-    vectorHeatSolver_.reset(new gc::SquareSolver<std::complex<double>>(vectorOperator));
+    heatFieldSolver_.reset(new gc::SquareSolver<std::complex<double>>(vectorOperator));
   }
 }
 
-gc::SparseMatrix<double> SignedVectorHeatSolver::buildCrouzeixRaviartDoubleConnectionLaplacian() const {
+gc::SparseMatrix<double> CustomSignedHeatSolver::buildCrouzeixRaviartDoubleConnectionLaplacian() const {
   geometry_.requireEdgeIndices();
   geometry_.requireEdgeLengths();
   geometry_.requireHalfedgeCotanWeights();
@@ -281,7 +295,7 @@ gc::SparseMatrix<double> SignedVectorHeatSolver::buildCrouzeixRaviartDoubleConne
   return laplacian;
 }
 
-gc::SparseMatrix<double> SignedVectorHeatSolver::buildCrouzeixRaviartDoubleMassMatrix() const {
+gc::SparseMatrix<double> CustomSignedHeatSolver::buildCrouzeixRaviartDoubleMassMatrix() const {
   geometry_.requireEdgeIndices();
   geometry_.requireFaceAreas();
 
@@ -305,8 +319,8 @@ gc::SparseMatrix<double> SignedVectorHeatSolver::buildCrouzeixRaviartDoubleMassM
   return mass;
 }
 
-void SignedVectorHeatSolver::buildSignedCurveSource(const gcs::Curve& curve,
-                                                    EdgeVectorHeat& sourceEdgeVectorHeat) const {
+void CustomSignedHeatSolver::buildSignedCurveSource(const gcs::Curve& curve,
+                                                    EdgeHeatField& sourceEdgeHeatField) const {
   for (size_t i = 0; i + 1 < curve.nodes.size(); ++i) {
     const gcs::SurfacePoint& pA = curve.nodes[i];
     const gcs::SurfacePoint& pB = curve.nodes[i + 1];
@@ -317,7 +331,7 @@ void SignedVectorHeatSolver::buildSignedCurveSource(const gcs::Curve& curve,
       if (pA.vertex == commonEdge.secondVertex()) {
         innerProduct.imag(-1.0);
       }
-      sourceEdgeVectorHeat[eIdx] += lengthOfSegment(pA, pB) * innerProduct;
+      sourceEdgeHeatField[eIdx] += lengthOfSegment(pA, pB) * innerProduct;
       continue;
     }
 
@@ -326,18 +340,18 @@ void SignedVectorHeatSolver::buildSignedCurveSource(const gcs::Curve& curve,
       throw std::runtime_error("source curve segment is not contained in a face");
     }
     for (gcs::Edge edge : commonFace.adjacentEdges()) {
-      sourceEdgeVectorHeat[geometry_.edgeIndices[edge]] += projectedNormal(pA, pB, edge);
+      sourceEdgeHeatField[geometry_.edgeIndices[edge]] += projectedNormal(pA, pB, edge);
     }
   }
 }
 
-double SignedVectorHeatSolver::lengthOfSegment(const gcs::SurfacePoint& pA,
+double CustomSignedHeatSolver::lengthOfSegment(const gcs::SurfacePoint& pA,
                                                const gcs::SurfacePoint& pB) const {
   gcs::BarycentricVector segment(pA, pB);
   return segment.norm(geometry_);
 }
 
-gcs::SurfacePoint SignedVectorHeatSolver::midSegmentSurfacePoint(const gcs::SurfacePoint& pA,
+gcs::SurfacePoint CustomSignedHeatSolver::midSegmentSurfacePoint(const gcs::SurfacePoint& pA,
                                                                  const gcs::SurfacePoint& pB) const {
   const gcs::Face commonFace = sharedFace(pA, pB);
   const gcs::SurfacePoint pAInFace = pA.inFace(commonFace);
@@ -345,7 +359,7 @@ gcs::SurfacePoint SignedVectorHeatSolver::midSegmentSurfacePoint(const gcs::Surf
   return gcs::SurfacePoint(commonFace, 0.5 * (pAInFace.faceCoords + pBInFace.faceCoords));
 }
 
-std::complex<double> SignedVectorHeatSolver::projectedNormal(const gcs::SurfacePoint& pA,
+std::complex<double> CustomSignedHeatSolver::projectedNormal(const gcs::SurfacePoint& pA,
                                                              const gcs::SurfacePoint& pB,
                                                              const gcs::Edge& edge) const {
   gcs::BarycentricVector segment(pA, pB);
@@ -375,7 +389,7 @@ std::complex<double> SignedVectorHeatSolver::projectedNormal(const gcs::SurfaceP
   return {cosTheta, sinTheta};
 }
 
-double SignedVectorHeatSolver::scalarCrouzeixRaviart(const gcs::SurfacePoint& point,
+double CustomSignedHeatSolver::scalarCrouzeixRaviart(const gcs::SurfacePoint& point,
                                                      const gcs::Edge& edge) const {
   gcs::Face shared = gcs::Face();
   switch (point.type) {
@@ -436,16 +450,16 @@ double SignedVectorHeatSolver::scalarCrouzeixRaviart(const gcs::SurfacePoint& po
   throw std::runtime_error("scalarCrouzeixRaviart received an unsupported SurfacePoint type");
 }
 
-FaceVectorHeat sampleAndNormalizeFaceVectorHeat(GeometryCentralSurface& surface,
-                                                const EdgeVectorHeat& diffusedEdgeVectorHeat) {
+FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& surface,
+                                                        const EdgeHeatField& diffusedEdgeHeatField) {
   auto& mesh = *surface.mesh;
   auto& geometry = *surface.geometry;
-  if (diffusedEdgeVectorHeat.size() != mesh.nEdges()) {
-    throw std::runtime_error("sampleAndNormalizeFaceVectorHeat requires one vector heat value per edge");
+  if (diffusedEdgeHeatField.size() != mesh.nEdges()) {
+    throw std::runtime_error("sampleAndNormalizeFaceDirections requires one heat-field value per edge");
   }
 
   geometry.requireEdgeIndices();
-  FaceVectorHeat normalized(mesh.nFaces(), Vec3::Zero());
+  FaceHeatDirectionField normalized(mesh.nFaces(), Vec3::Zero());
   for (gcs::Face face : mesh.faces()) {
     gc::Vector3 faceCoords = {0.0, 0.0, 0.0};
     for (gcs::Halfedge halfedge : face.adjacentHalfedges()) {
@@ -457,8 +471,8 @@ FaceVectorHeat sampleAndNormalizeFaceVectorHeat(GeometryCentralSurface& surface,
       gcs::BarycentricVector e2 = e1.rotate90(geometry);
       e1 /= e1.norm(geometry);
       e2 /= e2.norm(geometry);
-      faceCoords += std::real(diffusedEdgeVectorHeat[eIdx]) * e1.faceCoords;
-      faceCoords += std::imag(diffusedEdgeVectorHeat[eIdx]) * e2.faceCoords;
+      faceCoords += std::real(diffusedEdgeHeatField[eIdx]) * e1.faceCoords;
+      faceCoords += std::imag(diffusedEdgeHeatField[eIdx]) * e2.faceCoords;
     }
     gcs::BarycentricVector vector(face, faceCoords);
     const double magnitude = vector.norm(geometry);
@@ -473,13 +487,13 @@ FaceVectorHeat sampleAndNormalizeFaceVectorHeat(GeometryCentralSurface& surface,
   return normalized;
 }
 
-std::vector<Vec3> averageNormalizedFaceVectorHeatToVerticesReference(
+std::vector<Vec3> averageFaceDirectionsToVerticesReference(
     GeometryCentralSurface& surface,
-    const FaceVectorHeat& normalizedFaceVectorHeat) {
+    const FaceHeatDirectionField& normalizedFaceDirections) {
   auto& mesh = *surface.mesh;
   auto& geometry = *surface.geometry;
-  if (normalizedFaceVectorHeat.size() != mesh.nFaces()) {
-    throw std::runtime_error("averageNormalizedFaceVectorHeatToVerticesReference requires one vector per face");
+  if (normalizedFaceDirections.size() != mesh.nFaces()) {
+    throw std::runtime_error("averageFaceDirectionsToVerticesReference requires one direction per face");
   }
 
   geometry.requireFaceAreas();
@@ -489,7 +503,7 @@ std::vector<Vec3> averageNormalizedFaceVectorHeatToVerticesReference(
     gc::Vector3 average{0.0, 0.0, 0.0};
     double totalArea = 0.0;
     for (gcs::Face face : vertex.adjacentFaces()) {
-      const Vec3& coords = normalizedFaceVectorHeat[face.getIndex()];
+      const Vec3& coords = normalizedFaceDirections[face.getIndex()];
       const gcs::SurfacePoint point(face, gc::Vector3{coords.x(), coords.y(), coords.z()});
       const double area = geometry.faceAreas[face];
       average += area * point.interpolate(geometry.vertexPositions);
@@ -505,32 +519,33 @@ std::vector<Vec3> averageNormalizedFaceVectorHeatToVerticesReference(
   return vertexVectors;
 }
 
-SignedVectorHeatResult computeSignedVectorHeat(GeometryCentralSurface& surface,
+CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
                                                const std::vector<SurfaceReference>& sourceCurve,
                                                const SignedHeatSolveOptions& options) {
-  SignedVectorHeatSolver solver(surface, options.diffusionTimeCoefficient);
-  SignedVectorHeatResult result;
-  result.diffusion = solver.solveDiffusedEdgeVectorHeat(sourceCurve, options);
-  result.normalizedFaceVectorHeat =
-      sampleAndNormalizeFaceVectorHeat(surface, result.diffusion.diffusedEdgeVectorHeat);
-  result.vertexVectorHeat =
-      averageNormalizedFaceVectorHeatToVerticesReference(surface, result.normalizedFaceVectorHeat);
+  CustomSignedHeatSolver solver(surface, options.diffusionTimeCoefficient);
+  CustomSignedHeatResult result;
+  result.diffusion = solver.solveDiffusedEdgeHeatField(sourceCurve, options);
+  result.normalizedFaceDirections =
+      sampleAndNormalizeFaceDirections(surface, result.diffusion.diffusedEdgeHeatField);
+  result.vertexDirections =
+      averageFaceDirectionsToVerticesReference(surface, result.normalizedFaceDirections);
   return result;
 }
 
-std::array<SignedVectorHeatResult, 2> computeSignedVectorHeats(GeometryCentralSurface& surface,
-                                                               const SourceCurves& sourceCurves,
-                                                               const SignedHeatSolveOptions& options) {
-  SignedVectorHeatSolver solver(surface, options.diffusionTimeCoefficient);
-  std::array<SignedVectorHeatResult, 2> results;
+std::array<CustomSignedHeatResult, 2> computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
+                                                                        const SourceCurves& sourceCurves,
+                                                                        const SignedHeatSolveOptions& options) {
+  CustomSignedHeatSolver solver(surface, options.diffusionTimeCoefficient);
+  std::array<CustomSignedHeatResult, 2> results;
   for (size_t i = 0; i < results.size(); ++i) {
-    results[i].diffusion = solver.solveDiffusedEdgeVectorHeat(sourceCurves.curves[i], options);
-    results[i].normalizedFaceVectorHeat =
-        sampleAndNormalizeFaceVectorHeat(surface, results[i].diffusion.diffusedEdgeVectorHeat);
-    results[i].vertexVectorHeat =
-        averageNormalizedFaceVectorHeatToVerticesReference(surface, results[i].normalizedFaceVectorHeat);
+    results[i].diffusion = solver.solveDiffusedEdgeHeatField(sourceCurves.curves[i], options);
+    results[i].normalizedFaceDirections =
+        sampleAndNormalizeFaceDirections(surface, results[i].diffusion.diffusedEdgeHeatField);
+    results[i].vertexDirections =
+        averageFaceDirectionsToVerticesReference(surface, results[i].normalizedFaceDirections);
   }
   return results;
 }
 
 } // namespace geodesic_draping
+

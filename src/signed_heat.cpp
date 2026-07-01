@@ -22,6 +22,20 @@ std::vector<double> toOrderedVector(const geometrycentral::surface::VertexData<d
   return values;
 }
 
+geometrycentral::surface::SurfaceMesh& requireMesh(GeometryCentralSurface& surface) {
+  if (!surface.mesh) {
+    throw std::runtime_error("SignedHeatDistanceSolver requires a valid geometry-central mesh");
+  }
+  return *surface.mesh;
+}
+
+geometrycentral::surface::IntrinsicGeometryInterface& requireGeometry(GeometryCentralSurface& surface) {
+  if (!surface.geometry) {
+    throw std::runtime_error("SignedHeatDistanceSolver requires a valid geometry-central geometry");
+  }
+  return *surface.geometry;
+}
+
 } // namespace
 
 geometrycentral::surface::SurfacePoint toGeometryCentralSurfacePoint(
@@ -68,21 +82,39 @@ std::vector<double> computeSignedHeatDistance(GeometryCentralSurface& surface,
     throw std::runtime_error("computeSignedHeatDistance requires a valid geometry-central surface");
   }
 
-  geometrycentral::surface::SignedHeatSolver solver(*surface.geometry, options.diffusionTimeCoefficient);
-  std::vector<geometrycentral::surface::Curve> curves{
-      toGeometryCentralCurve(*surface.mesh, sourceCurve, true),
-  };
-  const geometrycentral::surface::VertexData<double> distance =
-      solver.computeDistance(curves, toGeometryCentralOptions(options));
-  return toOrderedVector(distance, *surface.mesh);
+  SignedHeatDistanceSolver solver(surface, options.diffusionTimeCoefficient);
+  return solver.computeDistance(sourceCurve, options);
 }
 
 std::array<std::vector<double>, 2> computeSignedHeatDistances(GeometryCentralSurface& surface,
                                                               const SourceCurves& sourceCurves,
                                                               const SignedHeatSolveOptions& options) {
+  SignedHeatDistanceSolver solver(surface, options.diffusionTimeCoefficient);
+  return solver.computeDistances(sourceCurves, options);
+}
+
+SignedHeatDistanceSolver::SignedHeatDistanceSolver(GeometryCentralSurface& surface,
+                                                   double diffusionTimeCoefficient)
+    : mesh_(requireMesh(surface)),
+      solver_(requireGeometry(surface), diffusionTimeCoefficient) {}
+
+std::vector<double> SignedHeatDistanceSolver::computeDistance(
+    const std::vector<SurfaceReference>& sourceCurve,
+    const SignedHeatSolveOptions& options) {
+  std::vector<geometrycentral::surface::Curve> curves{
+      toGeometryCentralCurve(mesh_, sourceCurve, true),
+  };
+  const geometrycentral::surface::VertexData<double> distance =
+      solver_.computeDistance(curves, toGeometryCentralOptions(options));
+  return toOrderedVector(distance, mesh_);
+}
+
+std::array<std::vector<double>, 2> SignedHeatDistanceSolver::computeDistances(
+    const SourceCurves& sourceCurves,
+    const SignedHeatSolveOptions& options) {
   return {
-      computeSignedHeatDistance(surface, sourceCurves.curves[0], options),
-      computeSignedHeatDistance(surface, sourceCurves.curves[1], options),
+      computeDistance(sourceCurves.curves[0], options),
+      computeDistance(sourceCurves.curves[1], options),
   };
 }
 

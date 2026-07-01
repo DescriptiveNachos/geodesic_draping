@@ -52,20 +52,20 @@ void testFixture(const std::filesystem::path& root,
   const auto generators = geodesic_draping::traceGenerators(surface, seed->surfacePoint, directions);
   const auto sourceCurves = geodesic_draping::pairOppositeGeneratorTraces(generators);
   const auto options = fixtureHeatOptions();
-  const auto heat = geodesic_draping::computeSignedVectorHeats(surface, sourceCurves, options);
+  const auto heat = geodesic_draping::computeCustomSignedHeatDirections(surface, sourceCurves, options);
 
-  requireNearVectorArray(heat[0].vertexVectorHeat,
+  requireNearVectorArray(heat[0].vertexDirections,
                          geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_0"),
                          tolerance,
                          name + " fast grad_0");
-  requireNearVectorArray(heat[1].vertexVectorHeat,
+  requireNearVectorArray(heat[1].vertexDirections,
                          geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_1"),
                          tolerance,
                          name + " fast grad_1");
 
-  if (heat[0].diffusion.sourceEdgeVectorHeat.size() != surface.mesh->nEdges() ||
-      heat[0].diffusion.diffusedEdgeVectorHeat.size() != surface.mesh->nEdges() ||
-      heat[0].normalizedFaceVectorHeat.size() != surface.mesh->nFaces()) {
+  if (heat[0].diffusion.sourceEdgeHeatField.size() != surface.mesh->nEdges() ||
+      heat[0].diffusion.diffusedEdgeHeatField.size() != surface.mesh->nEdges() ||
+      heat[0].normalizedFaceDirections.size() != surface.mesh->nFaces()) {
     throw std::runtime_error(name + " fast heat intermediate sizes do not match mesh");
   }
 
@@ -78,6 +78,12 @@ void testFixture(const std::filesystem::path& root,
                          geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_1"),
                          tolerance,
                          name + " high-level fast grad_1");
+
+  geodesic_draping::GeoDrapeSolver solver(mesh, options);
+  const auto first = solver.solveFast(seedXY, angleDegrees);
+  const auto second = solver.solveFast(seedXY, angleDegrees);
+  requireNearVectorArray(second.gradients[0], first.gradients[0], 1e-12, name + " persistent fast grad_0");
+  requireNearVectorArray(second.gradients[1], first.gradients[1], 1e-12, name + " persistent fast grad_1");
 }
 
 } // namespace
