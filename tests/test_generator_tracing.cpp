@@ -39,7 +39,9 @@ void testFixture(const std::filesystem::path& root, const std::string& name, boo
   const auto directions = geodesic_draping::generateOrthogonalDirections(angleDegrees);
 
   const auto traces = geodesic_draping::traceGenerators(surface, projection->surfacePoint, directions);
+  const auto sourceCurves = geodesic_draping::pairOppositeGeneratorTraces(traces);
   const auto goldenEnds = geodesic_draping::fixture_io::loadGoldenGeneratorLastPoints(fixtureDir);
+  const auto goldenPairedCounts = geodesic_draping::fixture_io::loadGoldenPairedGeneratorPointCounts(fixtureDir);
   assert(goldenEnds.size() == traces.size());
 
   for (size_t i = 0; i < traces.size(); ++i) {
@@ -53,6 +55,13 @@ void testFixture(const std::filesystem::path& root, const std::string& name, boo
       requireNear(traces[i].points.back(), goldenEnds[i], 1e-8,
                   name + " trace " + std::to_string(i) + " end");
     }
+  }
+
+  assert(sourceCurves.curves[0].size() == traces[1].surfaceReferences.size() + traces[0].surfaceReferences.size());
+  assert(sourceCurves.curves[1].size() == traces[3].surfaceReferences.size() + traces[2].surfaceReferences.size());
+  if (compareGoldenEnds) {
+    assert(sourceCurves.curves[0].size() == goldenPairedCounts[0]);
+    assert(sourceCurves.curves[1].size() == goldenPairedCounts[1]);
   }
 }
 

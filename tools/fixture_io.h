@@ -241,4 +241,15 @@ inline std::vector<size_t> loadGoldenGeneratorPointCounts(const std::filesystem:
   return counts;
 }
 
+inline std::vector<size_t> loadGoldenPairedGeneratorPointCounts(const std::filesystem::path& fixtureDir) {
+  const std::vector<double> values = numbersForKey(readText(fixtureDir / "golden.json"), "num_points");
+  if (values.size() < 6) {
+    throw std::runtime_error("expected four trace counts and two paired generator counts");
+  }
+  return {
+      static_cast<size_t>(values[4]),
+      static_cast<size_t>(values[5]),
+  };
+}
+
 } // namespace geodesic_draping::fixture_io

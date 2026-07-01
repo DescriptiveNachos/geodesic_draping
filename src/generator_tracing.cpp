@@ -112,4 +112,19 @@ std::array<GeneratorTrace, 4> traceGenerators(GeometryCentralSurface& surface,
   };
 }
 
+SourceCurves pairOppositeGeneratorTraces(const std::array<GeneratorTrace, 4>& traces) {
+  SourceCurves sourceCurves;
+
+  for (size_t pairIndex = 0; pairIndex < 2; ++pairIndex) {
+    const GeneratorTrace& negativeTrace = traces[2 * pairIndex + 1];
+    const GeneratorTrace& positiveTrace = traces[2 * pairIndex];
+    auto& curve = sourceCurves.curves[pairIndex];
+    curve.reserve(negativeTrace.surfaceReferences.size() + positiveTrace.surfaceReferences.size());
+    curve.insert(curve.end(), negativeTrace.surfaceReferences.rbegin(), negativeTrace.surfaceReferences.rend());
+    curve.insert(curve.end(), positiveTrace.surfaceReferences.begin(), positiveTrace.surfaceReferences.end());
+  }
+
+  return sourceCurves;
+}
+
 } // namespace geodesic_draping

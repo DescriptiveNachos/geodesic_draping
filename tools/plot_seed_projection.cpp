@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
     const auto directions = geodesic_draping::generateOrthogonalDirections(angleDegrees);
     auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
     const auto traces = geodesic_draping::traceGenerators(surface, projection->surfacePoint, directions);
+    const auto sourceCurves = geodesic_draping::pairOppositeGeneratorTraces(traces);
 
     const Vec3 goldenOrigin = geodesic_draping::fixture_io::loadGoldenOrigin(fixtureDir);
     const size_t goldenFaceIndex = geodesic_draping::fixture_io::loadGoldenSeedFaceIndex(fixtureDir);
@@ -86,6 +87,8 @@ int main(int argc, char** argv) {
         geodesic_draping::fixture_io::loadGoldenGeneratorLastPoints(fixtureDir);
     const std::vector<size_t> goldenGeneratorCounts =
         geodesic_draping::fixture_io::loadGoldenGeneratorPointCounts(fixtureDir);
+    const std::vector<size_t> goldenPairedCounts =
+        geodesic_draping::fixture_io::loadGoldenPairedGeneratorPointCounts(fixtureDir);
 
     std::cout << std::setprecision(17);
     std::cout << "Fixture: " << fixtureName << "\n"
@@ -117,6 +120,12 @@ int main(int argc, char** argv) {
                 << "  hit_boundary " << (traces[i].hitBoundary ? "true" : "false")
                 << "  length " << traces[i].length << "\n";
       printVectorComparison("  end", traces[i].points.back(), goldenGeneratorEnds[i]);
+    }
+    std::cout << "\n";
+    for (size_t i = 0; i < sourceCurves.curves.size(); ++i) {
+      std::cout << "source curve " << i
+                << " actual_refs " << sourceCurves.curves[i].size()
+                << "  golden_refs " << goldenPairedCounts[i] << "\n";
     }
 
     ProjectionPlotOptions options;

@@ -30,6 +30,10 @@ struct GeneratorTrace {
   double length = 0.0;
 };
 
+struct SourceCurves {
+  std::array<std::vector<SurfaceReference>, 2> curves;
+};
+
 struct TraceSettings {
   double traceLength = 10000.0;
   size_t maxIterations = geometrycentral::INVALID_IND;
@@ -44,6 +48,8 @@ std::array<GeneratorTrace, 4> traceGenerators(GeometryCentralSurface& surface,
                                               const BarycentricPoint& start,
                                               const std::array<Vec3, 4>& directions,
                                               const TraceSettings& settings = {});
+
+SourceCurves pairOppositeGeneratorTraces(const std::array<GeneratorTrace, 4>& traces);
 
 Vec3 interpolateSurfacePoint(const geometrycentral::surface::SurfacePoint& point,
                              geometrycentral::surface::VertexPositionGeometry& geometry);
