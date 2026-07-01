@@ -252,4 +252,9 @@ inline std::vector<size_t> loadGoldenPairedGeneratorPointCounts(const std::files
   };
 }
 
+inline std::vector<double> loadGoldenScalarArray(const std::filesystem::path& fixtureDir,
+                                                 const std::string& key) {
+  return numbersInArrayForKey(readText(fixtureDir / "golden.json"), key);
+}
+
 } // namespace geodesic_draping::fixture_io

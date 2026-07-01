@@ -23,6 +23,7 @@ add_library(geodesic_draping
   src/generator_tracing.cpp
   src/plotting.cpp
   src/seed_projection.cpp
+  src/signed_heat.cpp
   src/version.cpp)
 
 target_include_directories(geodesic_draping
@@ -102,6 +103,19 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
     PRIVATE
       GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
   add_test(NAME test_generator_tracing COMMAND test_generator_tracing)
+
+  add_executable(test_signed_heat
+    tests/test_signed_heat.cpp)
+  target_link_libraries(test_signed_heat
+    PRIVATE
+      geodesic_draping)
+  target_include_directories(test_signed_heat
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+  target_compile_definitions(test_signed_heat
+    PRIVATE
+      GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+  add_test(NAME test_signed_heat COMMAND test_signed_heat)
 endif()
 
 if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
