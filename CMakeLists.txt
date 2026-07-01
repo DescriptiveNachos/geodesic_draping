@@ -13,6 +13,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_subdirectory(extern/geometry-central)
 
 add_library(geodesic_draping
+  src/seed_projection.cpp
   src/version.cpp)
 
 target_include_directories(geodesic_draping
@@ -40,4 +41,14 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
     PRIVATE
       geodesic_draping)
   add_test(NAME smoke_geometrycentral COMMAND smoke_geometrycentral)
+
+  add_executable(test_seed_projection
+    tests/test_seed_projection.cpp)
+  target_link_libraries(test_seed_projection
+    PRIVATE
+      geodesic_draping)
+  target_compile_definitions(test_seed_projection
+    PRIVATE
+      GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+  add_test(NAME test_seed_projection COMMAND test_seed_projection)
 endif()
