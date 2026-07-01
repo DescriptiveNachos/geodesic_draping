@@ -86,6 +86,32 @@ void testFixture(const std::filesystem::path& root,
   requireNearVectorArray(second.gradients[1], first.gradients[1], 1e-12, name + " persistent fast grad_1");
 }
 
+void testFastFinite(const std::filesystem::path& root, const std::string& name) {
+  const std::filesystem::path fixtureDir = root / name;
+  const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
+  const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
+  const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
+  const auto fast = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions());
+
+  if (fast.gradients[0].size() != mesh.vertices.size() ||
+      fast.gradients[1].size() != mesh.vertices.size() ||
+      fast.shearAnglesDegrees.size() != mesh.vertices.size()) {
+    throw std::runtime_error(name + " fast output sizes do not match mesh");
+  }
+  for (const auto& field : fast.gradients) {
+    for (const auto& value : field) {
+      if (!std::isfinite(value.x()) || !std::isfinite(value.y()) || !std::isfinite(value.z())) {
+        throw std::runtime_error(name + " fast vector field contains non-finite values");
+      }
+    }
+  }
+  for (double value : fast.shearAnglesDegrees) {
+    if (!std::isfinite(value)) {
+      throw std::runtime_error(name + " fast shear contains non-finite values");
+    }
+  }
+}
+
 } // namespace
 
 int main() {
@@ -93,5 +119,7 @@ int main() {
   testFixture(fixtureRoot, "tiny_planar", 1e-12);
   testFixture(fixtureRoot, "small_curved", 2e-2);
   testFixture(fixtureRoot, "demo_part", 1e-10);
+  testFastFinite(fixtureRoot, "smooth_quality_good");
+  testFastFinite(fixtureRoot, "smooth_quality_poor");
   return 0;
 }

@@ -100,6 +100,14 @@ int main() {
   const auto small = solveFixture(fixtureRoot, "small_curved");
   requireFinite(small, geodesic_draping::fixture_io::loadMesh(fixtureRoot / "small_curved").vertices.size());
 
+  const auto smoothGood = solveFixture(fixtureRoot, "smooth_quality_good");
+  requireFinite(smoothGood,
+                geodesic_draping::fixture_io::loadMesh(fixtureRoot / "smooth_quality_good").vertices.size());
+
+  const auto smoothPoor = solveFixture(fixtureRoot, "smooth_quality_poor");
+  requireFinite(smoothPoor,
+                geodesic_draping::fixture_io::loadMesh(fixtureRoot / "smooth_quality_poor").vertices.size());
+
   const auto demo = solveFixture(fixtureRoot, "demo_part");
   requireFinite(demo, geodesic_draping::fixture_io::loadMesh(fixtureRoot / "demo_part").vertices.size());
   testPersistentSolver(fixtureRoot, "demo_part");

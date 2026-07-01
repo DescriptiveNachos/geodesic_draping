@@ -1,4 +1,5 @@
 #include "fixture_io.h"
+#include "geodesic_draping/diagnostics.h"
 #include "geodesic_draping/geodrape.h"
 #include "geodesic_draping/plotting.h"
 
@@ -17,8 +18,10 @@ namespace {
 
 using geodesic_draping::CompleteDrapeResult;
 using geodesic_draping::FastDrapeResult;
+using geodesic_draping::MagnitudeStats;
 using geodesic_draping::ProjectionPlotOptions;
 using geodesic_draping::Vec3;
+using geodesic_draping::VectorMagnitudeDiagnostics;
 
 void printUsage(const char* argv0) {
   std::cout << "Usage:\n"
@@ -74,6 +77,19 @@ void printStats(const std::string& label, const std::vector<double>& values) {
             << " min " << s.min
             << "  max " << s.max
             << "  mean " << s.mean << "\n";
+}
+
+void printMagnitudeDiagnostics(const std::string& label,
+                               const VectorMagnitudeDiagnostics& diagnostics) {
+  const MagnitudeStats& s = diagnostics.stats;
+  std::cout << std::left << std::setw(18) << label
+            << " |v| min " << s.min
+            << "  max " << s.max
+            << "  mean " << s.mean
+            << "  max_abs_unit_dev " << s.maxAbsDeviationFromUnit
+            << "  mean_abs_unit_dev " << s.meanAbsDeviationFromUnit
+            << "  near_zero " << s.nearZeroCount
+            << "  nonfinite " << s.nonFiniteCount << "\n";
 }
 
 void printVectorComparison(const std::string& label, const Vec3& actual, const Vec3& golden) {
@@ -224,6 +240,15 @@ int main(int argc, char** argv) {
     printScalarComparison("fast shear",
                           fastResult.shearAnglesDegrees,
                           geodesic_draping::fixture_io::loadGoldenShearArray(fixtureDir, "fast"));
+    std::cout << "\n";
+    const auto completeMagnitudeDiagnostics =
+        geodesic_draping::analyzeCompleteGradientMagnitudes(result);
+    const auto fastMagnitudeDiagnostics =
+        geodesic_draping::analyzeFastGradientMagnitudes(fastResult);
+    printMagnitudeDiagnostics("complete grad_0", completeMagnitudeDiagnostics[0]);
+    printMagnitudeDiagnostics("complete grad_1", completeMagnitudeDiagnostics[1]);
+    printMagnitudeDiagnostics("fast grad_0", fastMagnitudeDiagnostics[0]);
+    printMagnitudeDiagnostics("fast grad_1", fastMagnitudeDiagnostics[1]);
 
     ProjectionPlotOptions options;
     options.name = fixtureName + " drape comparison";

@@ -19,6 +19,7 @@ if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
 endif()
 
 add_library(geodesic_draping
+  src/diagnostics.cpp
   src/field_processing.cpp
   src/geodrape.cpp
   src/geometrycentral_adapter.cpp
@@ -145,6 +146,19 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
     PRIVATE
       GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
   add_test(NAME test_field_processing COMMAND test_field_processing)
+
+  add_executable(test_diagnostics
+    tests/test_diagnostics.cpp)
+  target_link_libraries(test_diagnostics
+    PRIVATE
+      geodesic_draping)
+  target_include_directories(test_diagnostics
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+  target_compile_definitions(test_diagnostics
+    PRIVATE
+      GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+  add_test(NAME test_diagnostics COMMAND test_diagnostics)
 
   add_executable(test_complete_drape
     tests/test_complete_drape.cpp)

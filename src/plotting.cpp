@@ -1,5 +1,7 @@
 #include "geodesic_draping/plotting.h"
 
+#include "geodesic_draping/diagnostics.h"
+
 #include <stdexcept>
 
 #if GEODESIC_DRAPING_HAS_POLYSCOPE
@@ -71,9 +73,13 @@ struct DrapeComparisonQuantities {
   polyscope::Quantity* completeDistance1 = nullptr;
   polyscope::Quantity* completeGradient0 = nullptr;
   polyscope::Quantity* completeGradient1 = nullptr;
+  polyscope::Quantity* completeGradient0Deviation = nullptr;
+  polyscope::Quantity* completeGradient1Deviation = nullptr;
   polyscope::Quantity* completeShear = nullptr;
   polyscope::Quantity* fastGradient0 = nullptr;
   polyscope::Quantity* fastGradient1 = nullptr;
+  polyscope::Quantity* fastGradient0Deviation = nullptr;
+  polyscope::Quantity* fastGradient1Deviation = nullptr;
   polyscope::Quantity* fastShear = nullptr;
   bool showFast = false;
   bool showVectors = false;
@@ -91,21 +97,29 @@ void applyDrapeComparisonDisplay(DrapeComparisonQuantities& quantities) {
   setEnabled(quantities.completeDistance1, false);
   setEnabled(quantities.completeGradient0, false);
   setEnabled(quantities.completeGradient1, false);
+  setEnabled(quantities.completeGradient0Deviation, false);
+  setEnabled(quantities.completeGradient1Deviation, false);
   setEnabled(quantities.completeShear, false);
   setEnabled(quantities.fastGradient0, false);
   setEnabled(quantities.fastGradient1, false);
+  setEnabled(quantities.fastGradient0Deviation, false);
+  setEnabled(quantities.fastGradient1Deviation, false);
   setEnabled(quantities.fastShear, false);
 
   if (quantities.showFast) {
     setEnabled(quantities.fastShear, true);
     setEnabled(quantities.fastGradient0, quantities.showVectors);
     setEnabled(quantities.fastGradient1, quantities.showVectors);
+    setEnabled(quantities.fastGradient0Deviation, true);
+    setEnabled(quantities.fastGradient1Deviation, true);
   } else {
     setEnabled(quantities.completeShear, quantities.completeScalar == 0);
     setEnabled(quantities.completeDistance0, quantities.completeScalar == 1);
     setEnabled(quantities.completeDistance1, quantities.completeScalar == 2);
     setEnabled(quantities.completeGradient0, quantities.showVectors);
     setEnabled(quantities.completeGradient1, quantities.showVectors);
+    setEnabled(quantities.completeGradient0Deviation, true);
+    setEnabled(quantities.completeGradient1Deviation, true);
   }
 }
 
@@ -252,12 +266,22 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
       "complete grad_0", toPolyscopePoints(completeResult.gradients[0]), polyscope::VectorType::AMBIENT);
   quantities->completeGradient1 = psMesh->addVertexVectorQuantity(
       "complete grad_1", toPolyscopePoints(completeResult.gradients[1]), polyscope::VectorType::AMBIENT);
+  const auto completeMagnitudeDiagnostics = analyzeCompleteGradientMagnitudes(completeResult);
+  quantities->completeGradient0Deviation = psMesh->addVertexScalarQuantity(
+      "abs(|complete grad_0| - 1)", completeMagnitudeDiagnostics[0].absDeviationFromUnit);
+  quantities->completeGradient1Deviation = psMesh->addVertexScalarQuantity(
+      "abs(|complete grad_1| - 1)", completeMagnitudeDiagnostics[1].absDeviationFromUnit);
   quantities->completeShear = psMesh->addVertexScalarQuantity(
       "complete shear_degrees", completeResult.shearAnglesDegrees);
   quantities->fastGradient0 = psMesh->addVertexVectorQuantity(
       "fast grad_0", toPolyscopePoints(fastResult.gradients[0]), polyscope::VectorType::AMBIENT);
   quantities->fastGradient1 = psMesh->addVertexVectorQuantity(
       "fast grad_1", toPolyscopePoints(fastResult.gradients[1]), polyscope::VectorType::AMBIENT);
+  const auto fastMagnitudeDiagnostics = analyzeFastGradientMagnitudes(fastResult);
+  quantities->fastGradient0Deviation = psMesh->addVertexScalarQuantity(
+      "abs(|fast grad_0| - 1)", fastMagnitudeDiagnostics[0].absDeviationFromUnit);
+  quantities->fastGradient1Deviation = psMesh->addVertexScalarQuantity(
+      "abs(|fast grad_1| - 1)", fastMagnitudeDiagnostics[1].absDeviationFromUnit);
   quantities->fastShear = psMesh->addVertexScalarQuantity(
       "fast shear_degrees", fastResult.shearAnglesDegrees);
   applyDrapeComparisonDisplay(*quantities);
