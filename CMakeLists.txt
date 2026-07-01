@@ -5,6 +5,7 @@ project(geodesic_draping
   LANGUAGES CXX)
 
 option(GEODESIC_DRAPING_BUILD_TESTS "Build geodesic draping tests" ON)
+option(GEODESIC_DRAPING_ENABLE_POLYSCOPE "Enable optional Polyscope plotting helpers" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,7 +13,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_subdirectory(extern/geometry-central)
 
+if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
+  set(POLYSCOPE_BACKEND_OPENGL3_EGL OFF CACHE STRING "Disable EGL backend on Windows" FORCE)
+  add_subdirectory(extern/polyscope)
+endif()
+
 add_library(geodesic_draping
+  src/plotting.cpp
   src/seed_projection.cpp
   src/version.cpp)
 
@@ -24,6 +31,19 @@ target_include_directories(geodesic_draping
 target_link_libraries(geodesic_draping
   PUBLIC
     geometry-central)
+
+if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
+  target_link_libraries(geodesic_draping
+    PUBLIC
+      polyscope)
+  target_compile_definitions(geodesic_draping
+    PUBLIC
+      GEODESIC_DRAPING_HAS_POLYSCOPE=1)
+else()
+  target_compile_definitions(geodesic_draping
+    PUBLIC
+      GEODESIC_DRAPING_HAS_POLYSCOPE=0)
+endif()
 
 if(GEODESIC_DRAPING_BUILD_TESTS)
   enable_testing()

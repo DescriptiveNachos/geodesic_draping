@@ -1,0 +1,22 @@
+#pragma once
+
+#include "geodesic_draping/seed_projection.h"
+
+#include <array>
+#include <string>
+
+namespace geodesic_draping {
+
+struct ProjectionPlotOptions {
+  std::string name = "geodesic draping seed";
+  double directionLength = 25.0;
+  bool clearExisting = false;
+  bool show = true;
+};
+
+void plotSeedProjectionStep(const SurfaceMeshData& mesh,
+                            const SeedProjection& projection,
+                            const std::array<Vec3, 4>& directions,
+                            const ProjectionPlotOptions& options = {});
+
+} // namespace geodesic_draping
