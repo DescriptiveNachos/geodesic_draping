@@ -3,6 +3,7 @@
 #include "geodesic_draping/geodrape.h"
 
 #include <cstddef>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -75,6 +76,9 @@ struct SolveQualityReport {
 };
 
 const char* toString(SolveQualityLevel level);
+
+SolveQualityThresholds loadSolveQualityThresholds(const std::filesystem::path& path,
+                                                  SolveQualityThresholds thresholds = {});
 
 SolveQualityReport analyzeSolveQuality(const SurfaceMeshData& mesh,
                                        const DrapeResult& result,

@@ -4,6 +4,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <fstream>
 #include <filesystem>
 #include <stdexcept>
 
@@ -82,6 +83,37 @@ void testDemoPartLocalShearWarning(const std::filesystem::path& root) {
   assert(report.level == geodesic_draping::SolveQualityLevel::Warning);
 }
 
+void testThresholdConfigLoader() {
+  const std::filesystem::path path = std::filesystem::current_path() / "quality_thresholds_test.cfg";
+  {
+    std::ofstream output(path);
+    output << "# partial quality threshold override\n";
+    output << "triangleAspectRatioWarning = 12.5\n";
+    output << "localShearJumpMaxPoor = 90\n";
+  }
+
+  const auto thresholds = geodesic_draping::loadSolveQualityThresholds(path);
+  assert(thresholds.triangleAspectRatioWarning == 12.5);
+  assert(thresholds.localShearJumpMaxPoor == 90.0);
+  assert(thresholds.edgeLengthP99ToMedianWarning == geodesic_draping::SolveQualityThresholds{}.edgeLengthP99ToMedianWarning);
+  std::filesystem::remove(path);
+
+  const std::filesystem::path badPath = std::filesystem::current_path() / "quality_thresholds_bad_test.cfg";
+  {
+    std::ofstream output(badPath);
+    output << "notAThreshold = 1\n";
+  }
+
+  bool threw = false;
+  try {
+    (void)geodesic_draping::loadSolveQualityThresholds(badPath);
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  std::filesystem::remove(badPath);
+  assert(threw);
+}
+
 } // namespace
 
 int main() {
@@ -89,5 +121,6 @@ int main() {
   testFixtureReports(fixtureRoot);
   testAspectRatioWarning();
   testDemoPartLocalShearWarning(fixtureRoot);
+  testThresholdConfigLoader();
   return 0;
 }

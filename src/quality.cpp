@@ -3,11 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace geodesic_draping {
@@ -62,6 +64,50 @@ std::string formatWarning(const std::string& label, double value, double thresho
   std::ostringstream out;
   out << label << " " << value << " exceeds threshold " << threshold;
   return out.str();
+}
+
+std::string trim(const std::string& text) {
+  const size_t first = text.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos) {
+    return "";
+  }
+  const size_t last = text.find_last_not_of(" \t\r\n");
+  return text.substr(first, last - first + 1);
+}
+
+bool setThresholdValue(SolveQualityThresholds& thresholds, const std::string& key, double value) {
+  if (key == "edgeLengthP99ToMedianWarning") {
+    thresholds.edgeLengthP99ToMedianWarning = value;
+  } else if (key == "edgeLengthP99ToMedianPoor") {
+    thresholds.edgeLengthP99ToMedianPoor = value;
+  } else if (key == "triangleAspectRatioWarning") {
+    thresholds.triangleAspectRatioWarning = value;
+  } else if (key == "triangleAspectRatioPoor") {
+    thresholds.triangleAspectRatioPoor = value;
+  } else if (key == "faceAreaRelativeToBboxWarning") {
+    thresholds.faceAreaRelativeToBboxWarning = value;
+  } else if (key == "faceAreaRelativeToBboxPoor") {
+    thresholds.faceAreaRelativeToBboxPoor = value;
+  } else if (key == "generatorMinLengthFraction") {
+    thresholds.generatorMinLengthFraction = value;
+  } else if (key == "generatorMaxLengthMultiplier") {
+    thresholds.generatorMaxLengthMultiplier = value;
+  } else if (key == "shearMaxMinusP99Warning") {
+    thresholds.shearMaxMinusP99Warning = value;
+  } else if (key == "shearMaxMinusP99Poor") {
+    thresholds.shearMaxMinusP99Poor = value;
+  } else if (key == "localShearJumpP99Warning") {
+    thresholds.localShearJumpP99Warning = value;
+  } else if (key == "localShearJumpP99Poor") {
+    thresholds.localShearJumpP99Poor = value;
+  } else if (key == "localShearJumpMaxWarning") {
+    thresholds.localShearJumpMaxWarning = value;
+  } else if (key == "localShearJumpMaxPoor") {
+    thresholds.localShearJumpMaxPoor = value;
+  } else {
+    return false;
+  }
+  return true;
 }
 
 MeshQualityStats analyzeMeshQuality(const SurfaceMeshData& mesh) {
@@ -310,6 +356,53 @@ const char* toString(SolveQualityLevel level) {
       return "Poor";
   }
   return "Unknown";
+}
+
+SolveQualityThresholds loadSolveQualityThresholds(const std::filesystem::path& path,
+                                                  SolveQualityThresholds thresholds) {
+  std::ifstream input(path);
+  if (!input) {
+    throw std::runtime_error("could not open quality threshold config: " + path.string());
+  }
+
+  std::string line;
+  size_t lineNumber = 0;
+  while (std::getline(input, line)) {
+    ++lineNumber;
+    const size_t comment = line.find('#');
+    if (comment != std::string::npos) {
+      line = line.substr(0, comment);
+    }
+    line = trim(line);
+    if (line.empty()) {
+      continue;
+    }
+
+    const size_t equals = line.find('=');
+    if (equals == std::string::npos) {
+      throw std::runtime_error("quality threshold config line " + std::to_string(lineNumber) +
+                               " is missing '='");
+    }
+
+    const std::string key = trim(line.substr(0, equals));
+    const std::string valueText = trim(line.substr(equals + 1));
+    if (key.empty() || valueText.empty()) {
+      throw std::runtime_error("quality threshold config line " + std::to_string(lineNumber) +
+                               " has an empty key or value");
+    }
+
+    size_t parsedLength = 0;
+    const double value = std::stod(valueText, &parsedLength);
+    if (parsedLength != valueText.size()) {
+      throw std::runtime_error("quality threshold config line " + std::to_string(lineNumber) +
+                               " has a non-numeric value");
+    }
+    if (!setThresholdValue(thresholds, key, value)) {
+      throw std::runtime_error("quality threshold config line " + std::to_string(lineNumber) +
+                               " uses unknown key '" + key + "'");
+    }
+  }
+  return thresholds;
 }
 
 SolveQualityReport analyzeSolveQuality(const SurfaceMeshData& mesh,

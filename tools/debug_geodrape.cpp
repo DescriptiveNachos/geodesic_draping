@@ -26,7 +26,8 @@ using geodesic_draping::VectorMagnitudeDiagnostics;
 
 void printUsage(const char* argv0) {
   std::cout << "Usage:\n"
-            << "  " << argv0 << " [fixture-name] [--no-show] [--direction-length value]\n\n"
+            << "  " << argv0
+            << " [fixture-name] [--no-show] [--direction-length value] [--quality-thresholds path]\n\n"
             << "Fixtures are loaded from " << GEODESIC_DRAPING_TEST_DATA_DIR << "\n"
             << "Default fixture: demo_part\n";
 }
@@ -169,6 +170,7 @@ int main(int argc, char** argv) {
     std::string fixtureName = "demo_part";
     bool show = true;
     double directionLength = 25.0;
+    geodesic_draping::SolveQualityThresholds qualityThresholds;
 
     for (int i = 1; i < argc; ++i) {
       const std::string arg = argv[i];
@@ -185,6 +187,13 @@ int main(int argc, char** argv) {
           throw std::runtime_error("--direction-length requires a value");
         }
         directionLength = std::stod(argv[++i]);
+        continue;
+      }
+      if (arg == "--quality-thresholds") {
+        if (i + 1 >= argc) {
+          throw std::runtime_error("--quality-thresholds requires a path");
+        }
+        qualityThresholds = geodesic_draping::loadSolveQualityThresholds(argv[++i], qualityThresholds);
         continue;
       }
       fixtureName = arg;
@@ -286,8 +295,8 @@ int main(int argc, char** argv) {
     printMagnitudeDiagnostics("fast face dir_1", geodesic_draping::analyzeVectorMagnitudes(faceDirections1));
     printShearSummary("fast face", *fastResult.faceShearAnglesDegrees);
     printShearSummary("fast vertex", *fastResult.vertexShearAnglesDegrees);
-    printQualityReport("complete", geodesic_draping::analyzeSolveQuality(mesh, result));
-    printQualityReport("fast", geodesic_draping::analyzeSolveQuality(mesh, fastResult));
+    printQualityReport("complete", geodesic_draping::analyzeSolveQuality(mesh, result, qualityThresholds));
+    printQualityReport("fast", geodesic_draping::analyzeSolveQuality(mesh, fastResult, qualityThresholds));
 
     ProjectionPlotOptions options;
     options.name = fixtureName + " drape comparison";
