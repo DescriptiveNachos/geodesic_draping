@@ -34,7 +34,9 @@ CompleteDrapeResult GeoDrapeSolver::solveComplete(const Vec2& seedXY, double ang
   return result;
 }
 
-FastDrapeResult GeoDrapeSolver::solveFast(const Vec2& seedXY, double angleDegrees) {
+FastDrapeResult GeoDrapeSolver::solveFast(const Vec2& seedXY,
+                                          double angleDegrees,
+                                          const FastDrapeOptions& fastOptions) {
   FastDrapeResult result;
 
   const std::optional<SeedProjection> seed = projectPointXYToMesh(meshData_, seedXY);
@@ -46,12 +48,14 @@ FastDrapeResult GeoDrapeSolver::solveFast(const Vec2& seedXY, double angleDegree
 
   result.generators = traceGenerators(surface_, result.seed.surfacePoint, result.directions);
   result.sourceCurves = pairOppositeGeneratorTraces(result.generators);
+  const bool computeDistances = fastOptions.mode == FastDrapeMode::HybridDistances;
   for (size_t i = 0; i < result.customHeatSolves.size(); ++i) {
-    result.customHeatSolves[i].diffusion =
-        customHeatSolver_.solveDiffusedEdgeHeatField(result.sourceCurves.curves[i], heatOptions_);
-    result.customHeatSolves[i].normalizedFaceDirections =
-        sampleAndNormalizeFaceDirections(surface_, result.customHeatSolves[i].diffusion.diffusedEdgeHeatField);
+    result.customHeatSolves[i] =
+        customHeatSolver_.solve(result.sourceCurves.curves[i], heatOptions_, computeDistances);
     result.faceDirections[i] = result.customHeatSolves[i].normalizedFaceDirections;
+    if (computeDistances) {
+      result.distances[i] = result.customHeatSolves[i].distance;
+    }
   }
   result.faceShearAnglesDegrees =
       computeFaceShearAnglesDegrees(surface_, result.faceDirections[0], result.faceDirections[1]);
@@ -72,9 +76,10 @@ CompleteDrapeResult solveCompleteDrape(const SurfaceMeshData& mesh,
 FastDrapeResult solveFastDrape(const SurfaceMeshData& mesh,
                                const Vec2& seedXY,
                                double angleDegrees,
-                               const SignedHeatSolveOptions& heatOptions) {
+                               const SignedHeatSolveOptions& heatOptions,
+                               const FastDrapeOptions& fastOptions) {
   GeoDrapeSolver solver(mesh, heatOptions);
-  return solver.solveFast(seedXY, angleDegrees);
+  return solver.solveFast(seedXY, angleDegrees, fastOptions);
 }
 
 } // namespace geodesic_draping

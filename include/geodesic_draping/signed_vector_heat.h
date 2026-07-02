@@ -26,6 +26,7 @@ struct DiffusedHeatFieldResult {
 struct CustomSignedHeatResult {
   DiffusedHeatFieldResult diffusion;
   FaceHeatDirectionField normalizedFaceDirections;
+  std::vector<double> distance;
 };
 
 class CustomSignedHeatSolver {
@@ -35,6 +36,10 @@ public:
   DiffusedHeatFieldResult solveDiffusedEdgeHeatField(
       const std::vector<SurfaceReference>& sourceCurve,
       const SignedHeatSolveOptions& options = {});
+
+  CustomSignedHeatResult solve(const std::vector<SurfaceReference>& sourceCurve,
+                               const SignedHeatSolveOptions& options = {},
+                               bool computeDistance = false);
 
 private:
   geometrycentral::surface::SurfaceMesh& mesh_;
@@ -48,6 +53,7 @@ private:
   geometrycentral::SparseMatrix<double> doubleConnectionLaplacian_;
   geometrycentral::SparseMatrix<double> doubleVectorOperator_;
   std::unique_ptr<geometrycentral::LinearSolver<std::complex<double>>> heatFieldSolver_;
+  std::unique_ptr<geometrycentral::PositiveDefiniteSolver<double>> poissonSolver_;
 
   std::vector<geometrycentral::surface::Curve> preprocessCurves(
       const std::vector<geometrycentral::surface::Curve>& curves) const;
@@ -57,8 +63,14 @@ private:
       const EdgeHeatField& sourceEdgeHeatField,
       const std::vector<geometrycentral::surface::Curve>& curves,
       const SignedHeatSolveOptions& options);
+  FaceHeatDirectionField sampleAndNormalizeFaceDirections(const EdgeHeatField& diffusedEdgeHeatField);
+  std::vector<double> integrateVectorFieldToDistance(
+      const FaceHeatDirectionField& normalizedFaceDirections,
+      const std::vector<geometrycentral::surface::Curve>& curves,
+      const SignedHeatSolveOptions& options);
 
   void ensureHaveHeatFieldSolver();
+  void ensureHavePoissonSolver();
   geometrycentral::SparseMatrix<double> buildCrouzeixRaviartDoubleConnectionLaplacian() const;
   geometrycentral::SparseMatrix<double> buildCrouzeixRaviartDoubleMassMatrix() const;
 
@@ -74,6 +86,8 @@ private:
                                        const geometrycentral::surface::Edge& edge) const;
   double scalarCrouzeixRaviart(const geometrycentral::surface::SurfacePoint& point,
                                const geometrycentral::surface::Edge& edge) const;
+  double averageValueOnSource(const geometrycentral::Vector<double>& phi,
+                              const std::vector<geometrycentral::surface::Curve>& curves) const;
 };
 
 FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& surface,

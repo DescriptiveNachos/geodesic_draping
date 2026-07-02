@@ -116,6 +116,23 @@ DiffusedHeatFieldResult CustomSignedHeatSolver::solveDiffusedEdgeHeatField(
   return result;
 }
 
+CustomSignedHeatResult CustomSignedHeatSolver::solve(const std::vector<SurfaceReference>& sourceCurve,
+                                                     const SignedHeatSolveOptions& options,
+                                                     bool computeDistance) {
+  CustomSignedHeatResult result;
+  result.diffusion = solveDiffusedEdgeHeatField(sourceCurve, options);
+  result.normalizedFaceDirections = sampleAndNormalizeFaceDirections(result.diffusion.diffusedEdgeHeatField);
+  if (computeDistance) {
+    std::vector<gcs::Curve> curves;
+    curves.reserve(result.diffusion.preprocessedSourceCurves.size());
+    for (const std::vector<SurfaceReference>& refs : result.diffusion.preprocessedSourceCurves) {
+      curves.push_back(toGeometryCentralCurve(mesh_, refs, true));
+    }
+    result.distance = integrateVectorFieldToDistance(result.normalizedFaceDirections, curves, options);
+  }
+  return result;
+}
+
 std::vector<gcs::Curve> CustomSignedHeatSolver::preprocessCurves(
     const std::vector<gcs::Curve>& curves) const {
   std::vector<gcs::Curve> newCurves;
@@ -234,6 +251,93 @@ EdgeHeatField CustomSignedHeatSolver::diffuseEdgeHeatField(
   return toStdVector(diffused);
 }
 
+FaceHeatDirectionField CustomSignedHeatSolver::sampleAndNormalizeFaceDirections(
+    const EdgeHeatField& diffusedEdgeHeatField) {
+  if (diffusedEdgeHeatField.size() != mesh_.nEdges()) {
+    throw std::runtime_error("sampleAndNormalizeFaceDirections requires one heat-field value per edge");
+  }
+
+  geometry_.requireEdgeIndices();
+  FaceHeatDirectionField normalized(mesh_.nFaces(), Vec3::Zero());
+  for (gcs::Face face : mesh_.faces()) {
+    gc::Vector3 faceCoords = {0.0, 0.0, 0.0};
+    for (gcs::Halfedge halfedge : face.adjacentHalfedges()) {
+      const size_t eIdx = geometry_.edgeIndices[halfedge.edge()];
+      gcs::BarycentricVector e1(halfedge, face);
+      if (!halfedge.orientation()) {
+        e1 *= -1.0;
+      }
+      gcs::BarycentricVector e2 = e1.rotate90(geometry_);
+      e1 /= e1.norm(geometry_);
+      e2 /= e2.norm(geometry_);
+      faceCoords += std::real(diffusedEdgeHeatField[eIdx]) * e1.faceCoords;
+      faceCoords += std::imag(diffusedEdgeHeatField[eIdx]) * e2.faceCoords;
+    }
+    gcs::BarycentricVector vector(face, faceCoords);
+    const double magnitude = vector.norm(geometry_);
+    if (magnitude != 0.0) {
+      faceCoords = (vector / magnitude).faceCoords;
+    } else {
+      faceCoords = {0.0, 0.0, 0.0};
+    }
+    normalized[face.getIndex()] = Vec3(faceCoords.x, faceCoords.y, faceCoords.z);
+  }
+  geometry_.unrequireEdgeIndices();
+  return normalized;
+}
+
+std::vector<double> CustomSignedHeatSolver::integrateVectorFieldToDistance(
+    const FaceHeatDirectionField& normalizedFaceDirections,
+    const std::vector<gcs::Curve>& curves,
+    const SignedHeatSolveOptions& options) {
+  if (options.levelSetConstraint != gc::LevelSetConstraint::None) {
+    throw std::runtime_error("custom signed heat distance currently supports only LevelSetConstraint::None");
+  }
+  if (normalizedFaceDirections.size() != mesh_.nFaces()) {
+    throw std::runtime_error("integrateVectorFieldToDistance requires one direction per face");
+  }
+
+  geometry_.requireHalfedgeCotanWeights();
+  geometry_.requireVertexIndices();
+
+  gc::Vector<double> divergence = gc::Vector<double>::Zero(static_cast<Eigen::Index>(mesh_.nVertices()));
+  for (gcs::Vertex vertex : mesh_.vertices()) {
+    const size_t vertexIndex = geometry_.vertexIndices[vertex];
+    for (gcs::Corner corner : vertex.adjacentCorners()) {
+      const gcs::Face face = corner.face();
+      const gcs::Halfedge heA = corner.halfedge();
+      const gcs::Halfedge heB = heA.next().next();
+      const Vec3& coords = normalizedFaceDirections[face.getIndex()];
+      const gcs::BarycentricVector direction(face, gc::Vector3{coords.x(), coords.y(), coords.z()});
+      const gcs::BarycentricVector e1(heA, face);
+      const gcs::BarycentricVector e2 = -gcs::BarycentricVector(heB, face);
+      const double w1 = geometry_.halfedgeCotanWeights[heA] * dot(geometry_, e1, direction);
+      const double w2 = geometry_.halfedgeCotanWeights[heB] * dot(geometry_, e2, direction);
+      divergence[static_cast<Eigen::Index>(vertexIndex)] += w1 + w2;
+    }
+  }
+  geometry_.unrequireHalfedgeCotanWeights();
+
+  ensureHavePoissonSolver();
+  gc::Vector<double> phi = poissonSolver_->solve(divergence);
+  phi *= -1.0;
+  if (!curves.empty()) {
+    const double shift = averageValueOnSource(phi, curves);
+    phi -= gc::Vector<double>::Ones(static_cast<Eigen::Index>(mesh_.nVertices())) * shift;
+  } else {
+    phi -= gc::Vector<double>::Ones(static_cast<Eigen::Index>(mesh_.nVertices())) * phi.minCoeff();
+  }
+
+  std::vector<double> distance(mesh_.nVertices(), 0.0);
+  for (gcs::Vertex vertex : mesh_.vertices()) {
+    const size_t vertexIndex = geometry_.vertexIndices[vertex];
+    distance[vertex.getIndex()] = phi[static_cast<Eigen::Index>(vertexIndex)];
+  }
+
+  geometry_.unrequireVertexIndices();
+  return distance;
+}
+
 void CustomSignedHeatSolver::ensureHaveHeatFieldSolver() {
   if (heatFieldSolver_) {
     return;
@@ -260,6 +364,16 @@ void CustomSignedHeatSolver::ensureHaveHeatFieldSolver() {
   } else {
     heatFieldSolver_.reset(new gc::SquareSolver<std::complex<double>>(vectorOperator));
   }
+}
+
+void CustomSignedHeatSolver::ensureHavePoissonSolver() {
+  if (poissonSolver_) {
+    return;
+  }
+
+  geometry_.requireCotanLaplacian();
+  poissonSolver_.reset(new gc::PositiveDefiniteSolver<double>(geometry_.cotanLaplacian));
+  geometry_.unrequireCotanLaplacian();
 }
 
 gc::SparseMatrix<double> CustomSignedHeatSolver::buildCrouzeixRaviartDoubleConnectionLaplacian() const {
@@ -466,6 +580,34 @@ double CustomSignedHeatSolver::scalarCrouzeixRaviart(const gcs::SurfacePoint& po
   throw std::runtime_error("scalarCrouzeixRaviart received an unsupported SurfacePoint type");
 }
 
+double CustomSignedHeatSolver::averageValueOnSource(const gc::Vector<double>& phi,
+                                                    const std::vector<gcs::Curve>& curves) const {
+  double shift = 0.0;
+  double normalization = 0.0;
+  for (const gcs::Curve& curve : curves) {
+    for (size_t i = 0; i + 1 < curve.nodes.size(); ++i) {
+      const gcs::SurfacePoint& pA = curve.nodes[i];
+      const gcs::SurfacePoint& pB = curve.nodes[i + 1];
+      const double segmentLength = lengthOfSegment(pA, pB);
+      const gcs::SurfacePoint midpoint = midSegmentSurfacePoint(pA, pB);
+      const gcs::Face face = midpoint.face;
+      size_t localIndex = 0;
+      for (gcs::Vertex vertex : face.adjacentVertices()) {
+        const double weight = midpoint.faceCoords[localIndex];
+        const size_t vertexIndex = geometry_.vertexIndices[vertex];
+        shift += weight * segmentLength * phi[static_cast<Eigen::Index>(vertexIndex)];
+        ++localIndex;
+      }
+      normalization += segmentLength;
+    }
+  }
+
+  if (normalization == 0.0) {
+    return 0.0;
+  }
+  return shift / normalization;
+}
+
 FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& surface,
                                                         const EdgeHeatField& diffusedEdgeHeatField) {
   auto& mesh = *surface.mesh;
@@ -560,11 +702,7 @@ CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface&
                                                const std::vector<SurfaceReference>& sourceCurve,
                                                const SignedHeatSolveOptions& options) {
   CustomSignedHeatSolver solver(surface, options.diffusionTimeCoefficient);
-  CustomSignedHeatResult result;
-  result.diffusion = solver.solveDiffusedEdgeHeatField(sourceCurve, options);
-  result.normalizedFaceDirections =
-      sampleAndNormalizeFaceDirections(surface, result.diffusion.diffusedEdgeHeatField);
-  return result;
+  return solver.solve(sourceCurve, options, false);
 }
 
 std::array<CustomSignedHeatResult, 2> computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
@@ -573,9 +711,7 @@ std::array<CustomSignedHeatResult, 2> computeCustomSignedHeatDirections(Geometry
   CustomSignedHeatSolver solver(surface, options.diffusionTimeCoefficient);
   std::array<CustomSignedHeatResult, 2> results;
   for (size_t i = 0; i < results.size(); ++i) {
-    results[i].diffusion = solver.solveDiffusedEdgeHeatField(sourceCurves.curves[i], options);
-    results[i].normalizedFaceDirections =
-        sampleAndNormalizeFaceDirections(surface, results[i].diffusion.diffusedEdgeHeatField);
+    results[i] = solver.solve(sourceCurves.curves[i], options, false);
   }
   return results;
 }
