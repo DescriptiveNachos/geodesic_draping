@@ -2,7 +2,9 @@
 #include "geodesic_draping/generator_tracing.h"
 #include "geodesic_draping/seed_projection.h"
 #include "geodesic_draping/signed_heat.h"
+#include "geodesic_draping/custom_signed_heat.h"
 
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <filesystem>
@@ -35,7 +37,9 @@ FixtureSolve solveFixture(const std::filesystem::path& root, const std::string& 
   options.levelSetConstraint = geometrycentral::LevelSetConstraint::None;
   options.softLevelSetWeight = -1.0;
 
-  return {meshData, geodesic_draping::computeSignedHeatDistances(surface, sourceCurves, options)};
+  geodesic_draping::CustomSignedHeatSolver solver(surface, options.diffusionTimeCoefficient);
+  const auto heatSolves = solver.solve(sourceCurves, options, true);
+  return {meshData, {heatSolves[0].distance, heatSolves[1].distance}};
 }
 
 void requireFiniteDistanceFields(const FixtureSolve& solve, const std::string& name) {

@@ -2,8 +2,7 @@
 
 #include "geodesic_draping/field_processing.h"
 #include "geodesic_draping/generator_tracing.h"
-#include "geodesic_draping/signed_heat.h"
-#include "geodesic_draping/signed_vector_heat.h"
+#include "geodesic_draping/custom_signed_heat.h"
 
 #include <array>
 #include <vector>
@@ -32,13 +31,27 @@ struct FastDrapeResult {
   std::vector<double> vertexShearAnglesDegrees;
 };
 
-enum class FastDrapeMode {
-  FaceShearOnly,
-  HybridDistances,
+enum class DrapeSolveMode {
+  Fast,
+  Hybrid,
+  Complete,
 };
 
-struct FastDrapeOptions {
-  FastDrapeMode mode = FastDrapeMode::FaceShearOnly;
+struct DrapeSolveOptions {
+  DrapeSolveMode mode = DrapeSolveMode::Fast;
+};
+
+struct DrapeResult {
+  SeedProjection seed;
+  std::array<Vec3, 4> directions;
+  std::array<GeneratorTrace, 4> generators;
+  SourceCurves sourceCurves;
+  std::array<CustomSignedHeatResult, 2> customHeatSolves;
+  std::array<FaceHeatDirectionField, 2> faceDirections;
+  std::array<std::vector<double>, 2> distances;
+  std::array<std::vector<Vec3>, 2> gradients;
+  std::vector<double> faceShearAnglesDegrees;
+  std::vector<double> vertexShearAnglesDegrees;
 };
 
 class GeoDrapeSolver {
@@ -46,16 +59,18 @@ public:
   explicit GeoDrapeSolver(SurfaceMeshData meshData,
                           const SignedHeatSolveOptions& heatOptions = {});
 
+  DrapeResult solve(const Vec2& seedXY,
+                    double angleDegrees,
+                    const DrapeSolveOptions& solveOptions = {});
   CompleteDrapeResult solveComplete(const Vec2& seedXY, double angleDegrees);
   FastDrapeResult solveFast(const Vec2& seedXY,
                             double angleDegrees,
-                            const FastDrapeOptions& fastOptions = {});
+                            const DrapeSolveOptions& solveOptions = {});
 
 private:
   SurfaceMeshData meshData_;
   GeometryCentralSurface surface_;
   SignedHeatSolveOptions heatOptions_;
-  SignedHeatDistanceSolver distanceSolver_;
   CustomSignedHeatSolver customHeatSolver_;
 };
 
@@ -68,6 +83,6 @@ FastDrapeResult solveFastDrape(const SurfaceMeshData& mesh,
                                const Vec2& seedXY,
                                double angleDegrees,
                                const SignedHeatSolveOptions& heatOptions = {},
-                               const FastDrapeOptions& fastOptions = {});
+                               const DrapeSolveOptions& solveOptions = {});
 
 } // namespace geodesic_draping

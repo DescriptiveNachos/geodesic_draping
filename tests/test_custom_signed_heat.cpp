@@ -2,8 +2,9 @@
 #include "geodesic_draping/geodrape.h"
 #include "geodesic_draping/geometrycentral_adapter.h"
 #include "geodesic_draping/seed_projection.h"
-#include "geodesic_draping/signed_vector_heat.h"
+#include "geodesic_draping/custom_signed_heat.h"
 
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -47,6 +48,7 @@ void requireNearArray(const std::vector<double>& actual,
     maxDiff = std::max(maxDiff, std::abs(actual[i] - expected[i]));
   }
   if (maxDiff > tolerance) {
+    std::cerr << label << " max diff " << maxDiff << " exceeds tolerance " << tolerance << "\n";
     throw std::runtime_error(label + " exceeded tolerance");
   }
 }
@@ -68,8 +70,7 @@ void testFixture(const std::filesystem::path& root,
   const auto generators = geodesic_draping::traceGenerators(surface, seed->surfacePoint, directions);
   const auto sourceCurves = geodesic_draping::pairOppositeGeneratorTraces(generators);
   const auto options = fixtureHeatOptions();
-  const auto heat = geodesic_draping::computeCustomSignedHeatDirections(surface, sourceCurves, options);
-  const auto referenceDistances = geodesic_draping::computeSignedHeatDistances(surface, sourceCurves, options);
+  const auto heat = geodesic_draping::computeCustomSignedHeat(surface, sourceCurves, options);
 
   if (heat[0].diffusion.sourceEdgeHeatField.size() != surface.mesh->nEdges() ||
       heat[0].diffusion.diffusedEdgeHeatField.size() != surface.mesh->nEdges() ||
@@ -107,11 +108,12 @@ void testFixture(const std::filesystem::path& root,
   requireNearArray(fast.faceShearAnglesDegrees, faceShear, tolerance, name + " high-level face shear");
   requireNearArray(fast.vertexShearAnglesDegrees, vertexShear, tolerance, name + " high-level vertex shear");
 
-  geodesic_draping::FastDrapeOptions fastOptions;
-  fastOptions.mode = geodesic_draping::FastDrapeMode::HybridDistances;
-  const auto fastWithDistances = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options, fastOptions);
-  requireNearArray(fastWithDistances.distances[0], referenceDistances[0], 1e-8, name + " custom dist_0");
-  requireNearArray(fastWithDistances.distances[1], referenceDistances[1], 1e-8, name + " custom dist_1");
+  geodesic_draping::DrapeSolveOptions hybridOptions;
+  hybridOptions.mode = geodesic_draping::DrapeSolveMode::Hybrid;
+  const auto fastWithDistances = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options, hybridOptions);
+  const auto complete = geodesic_draping::solveCompleteDrape(mesh, seedXY, angleDegrees, options);
+  requireNearArray(fastWithDistances.distances[0], complete.distances[0], 1e-12, name + " hybrid dist_0");
+  requireNearArray(fastWithDistances.distances[1], complete.distances[1], 1e-12, name + " hybrid dist_1");
   requireNearArray(fastWithDistances.faceShearAnglesDegrees,
                    fast.faceShearAnglesDegrees,
                    tolerance,

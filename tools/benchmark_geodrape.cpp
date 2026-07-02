@@ -3,10 +3,10 @@
 #include "geodesic_draping/geodrape.h"
 #include "geodesic_draping/geometrycentral_adapter.h"
 #include "geodesic_draping/seed_projection.h"
-#include "geodesic_draping/signed_heat.h"
-#include "geodesic_draping/signed_vector_heat.h"
+#include "geodesic_draping/custom_signed_heat.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <iomanip>
@@ -114,7 +114,7 @@ StepTimings runCompleteOnce(const geodesic_draping::SurfaceMeshData& mesh,
   StepTimings timings;
   const auto constructStart = Clock::now();
   auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
-  geodesic_draping::SignedHeatDistanceSolver distanceSolver(
+  geodesic_draping::CustomSignedHeatSolver heatSolver(
       surface,
       fixtureHeatOptions().diffusionTimeCoefficient);
   timings.constructSeconds = secondsSince(constructStart);
@@ -134,7 +134,8 @@ StepTimings runCompleteOnce(const geodesic_draping::SurfaceMeshData& mesh,
   timings.generatorsSeconds = secondsSince(phaseStart);
 
   phaseStart = Clock::now();
-  const auto distances = distanceSolver.computeDistances(sourceCurves, fixtureHeatOptions());
+  const auto heatSolves = heatSolver.solve(sourceCurves, fixtureHeatOptions(), true);
+  std::array<std::vector<double>, 2> distances{heatSolves[0].distance, heatSolves[1].distance};
   timings.heatSeconds = secondsSince(phaseStart);
 
   phaseStart = Clock::now();
