@@ -1,4 +1,4 @@
-#include "geodesic_draping/signed_vector_heat.h"
+#include "geodesic_draping/custom_signed_heat.h"
 
 #include "geometrycentral/numerical/linear_algebra_utilities.h"
 #include "geometrycentral/surface/barycentric_vector.h"
@@ -131,6 +131,16 @@ CustomSignedHeatResult CustomSignedHeatSolver::solve(const std::vector<SurfaceRe
     result.distance = integrateVectorFieldToDistance(result.normalizedFaceDirections, curves, options);
   }
   return result;
+}
+
+std::array<CustomSignedHeatResult, 2> CustomSignedHeatSolver::solve(const SourceCurves& sourceCurves,
+                                                                    const SignedHeatSolveOptions& options,
+                                                                    bool computeDistance) {
+  std::array<CustomSignedHeatResult, 2> results;
+  for (size_t i = 0; i < results.size(); ++i) {
+    results[i] = solve(sourceCurves.curves[i], options, computeDistance);
+  }
+  return results;
 }
 
 std::vector<gcs::Curve> CustomSignedHeatSolver::preprocessCurves(
@@ -698,22 +708,18 @@ std::vector<double> computeFaceShearAnglesDegrees(
   return shear;
 }
 
-CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
+CustomSignedHeatResult computeCustomSignedHeat(GeometryCentralSurface& surface,
                                                const std::vector<SurfaceReference>& sourceCurve,
                                                const SignedHeatSolveOptions& options) {
   CustomSignedHeatSolver solver(surface, options.diffusionTimeCoefficient);
   return solver.solve(sourceCurve, options, false);
 }
 
-std::array<CustomSignedHeatResult, 2> computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
+std::array<CustomSignedHeatResult, 2> computeCustomSignedHeat(GeometryCentralSurface& surface,
                                                                         const SourceCurves& sourceCurves,
                                                                         const SignedHeatSolveOptions& options) {
   CustomSignedHeatSolver solver(surface, options.diffusionTimeCoefficient);
-  std::array<CustomSignedHeatResult, 2> results;
-  for (size_t i = 0; i < results.size(); ++i) {
-    results[i] = solver.solve(sourceCurves.curves[i], options, false);
-  }
-  return results;
+  return solver.solve(sourceCurves, options, false);
 }
 
 } // namespace geodesic_draping

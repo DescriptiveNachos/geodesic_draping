@@ -41,6 +41,10 @@ public:
                                const SignedHeatSolveOptions& options = {},
                                bool computeDistance = false);
 
+  std::array<CustomSignedHeatResult, 2> solve(const SourceCurves& sourceCurves,
+                                              const SignedHeatSolveOptions& options = {},
+                                              bool computeDistance = false);
+
 private:
   geometrycentral::surface::SurfaceMesh& mesh_;
   geometrycentral::surface::IntrinsicGeometryInterface& geometry_;
@@ -102,11 +106,11 @@ std::vector<double> computeFaceShearAnglesDegrees(
     const FaceHeatDirectionField& normalizedFaceDirections0,
     const FaceHeatDirectionField& normalizedFaceDirections1);
 
-CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
+CustomSignedHeatResult computeCustomSignedHeat(GeometryCentralSurface& surface,
                                                          const std::vector<SurfaceReference>& sourceCurve,
                                                          const SignedHeatSolveOptions& options = {});
 
-std::array<CustomSignedHeatResult, 2> computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
+std::array<CustomSignedHeatResult, 2> computeCustomSignedHeat(GeometryCentralSurface& surface,
                                                                         const SourceCurves& sourceCurves,
                                                                         const SignedHeatSolveOptions& options = {});
 

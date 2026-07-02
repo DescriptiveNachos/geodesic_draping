@@ -21,4 +21,9 @@ std::vector<double> averageFaceScalarsToVertices(const SurfaceMeshData& mesh,
                                                  const std::vector<double>& faceScalars,
                                                  FaceScalarAveraging averaging = FaceScalarAveraging::FaceArea);
 
+// Samples a vertex scalar field at face centroids. This is a smoothing projection,
+// not an inverse of averageFaceScalarsToVertices().
+std::vector<double> averageVertexScalarsToFaces(const SurfaceMeshData& mesh,
+                                                const std::vector<double>& vertexScalars);
+
 } // namespace geodesic_draping

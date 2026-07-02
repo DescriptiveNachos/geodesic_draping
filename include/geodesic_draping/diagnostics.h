@@ -29,8 +29,8 @@ struct VectorMagnitudeDiagnostics {
 VectorMagnitudeDiagnostics analyzeVectorMagnitudes(const std::vector<Vec3>& vectors,
                                                    double nearZeroEpsilon = 1e-12);
 
-std::array<VectorMagnitudeDiagnostics, 2> analyzeCompleteGradientMagnitudes(
-    const CompleteDrapeResult& result,
+std::array<VectorMagnitudeDiagnostics, 2> analyzeGradientMagnitudes(
+    const std::array<std::vector<Vec3>, 2>& gradients,
     double nearZeroEpsilon = 1e-12);
 
 } // namespace geodesic_draping

@@ -93,9 +93,22 @@ void testFaceScalarAveraging() {
       geodesic_draping::FaceScalarAveraging::FaceArea);
   requireNearArray(averaged, {3.0, 2.0, 3.0, 4.0}, 1e-12, "area face scalar average");
 
+  const std::vector<double> faceAveraged = geodesic_draping::averageVertexScalarsToFaces(
+      mesh,
+      {1.0, 2.0, 3.0, 4.0});
+  requireNearArray(faceAveraged, {2.0, 8.0 / 3.0}, 1e-12, "vertex scalar face average");
+
   bool threw = false;
   try {
     (void)geodesic_draping::averageFaceScalarsToVertices(mesh, {1.0});
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  assert(threw);
+
+  threw = false;
+  try {
+    (void)geodesic_draping::averageVertexScalarsToFaces(mesh, {1.0});
   } catch (const std::runtime_error&) {
     threw = true;
   }

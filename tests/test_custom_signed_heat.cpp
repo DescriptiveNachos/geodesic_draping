@@ -2,8 +2,9 @@
 #include "geodesic_draping/geodrape.h"
 #include "geodesic_draping/geometrycentral_adapter.h"
 #include "geodesic_draping/seed_projection.h"
-#include "geodesic_draping/signed_vector_heat.h"
+#include "geodesic_draping/custom_signed_heat.h"
 
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -47,6 +48,7 @@ void requireNearArray(const std::vector<double>& actual,
     maxDiff = std::max(maxDiff, std::abs(actual[i] - expected[i]));
   }
   if (maxDiff > tolerance) {
+    std::cerr << label << " max diff " << maxDiff << " exceeds tolerance " << tolerance << "\n";
     throw std::runtime_error(label + " exceeded tolerance");
   }
 }
@@ -68,8 +70,7 @@ void testFixture(const std::filesystem::path& root,
   const auto generators = geodesic_draping::traceGenerators(surface, seed->surfacePoint, directions);
   const auto sourceCurves = geodesic_draping::pairOppositeGeneratorTraces(generators);
   const auto options = fixtureHeatOptions();
-  const auto heat = geodesic_draping::computeCustomSignedHeatDirections(surface, sourceCurves, options);
-  const auto referenceDistances = geodesic_draping::computeSignedHeatDistances(surface, sourceCurves, options);
+  const auto heat = geodesic_draping::computeCustomSignedHeat(surface, sourceCurves, options);
 
   if (heat[0].diffusion.sourceEdgeHeatField.size() != surface.mesh->nEdges() ||
       heat[0].diffusion.diffusedEdgeHeatField.size() != surface.mesh->nEdges() ||
@@ -94,38 +95,59 @@ void testFixture(const std::filesystem::path& root,
     throw std::runtime_error(name + " sampled vertex shear does not match mesh");
   }
 
-  const auto fast = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options);
+  const auto fast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options);
   if (fast.faceDirections[0].size() != surface.mesh->nFaces() ||
       fast.faceDirections[1].size() != surface.mesh->nFaces() ||
-      fast.faceShearAnglesDegrees.size() != surface.mesh->nFaces() ||
-      fast.vertexShearAnglesDegrees.size() != mesh.vertices.size()) {
+      !fast.faceShearAnglesDegrees ||
+      fast.faceShearAnglesDegrees->size() != surface.mesh->nFaces()) {
     throw std::runtime_error(name + " high-level fast output sizes do not match mesh");
   }
-  if (!fast.distances[0].empty() || !fast.distances[1].empty()) {
+  if (fast.distances) {
     throw std::runtime_error(name + " default fast result should not return distances");
   }
-  requireNearArray(fast.faceShearAnglesDegrees, faceShear, tolerance, name + " high-level face shear");
-  requireNearArray(fast.vertexShearAnglesDegrees, vertexShear, tolerance, name + " high-level vertex shear");
+  if (fast.vertexShearAnglesDegrees) {
+    throw std::runtime_error(name + " default fast result should not sample vertex shear");
+  }
+  requireNearArray(*fast.faceShearAnglesDegrees, faceShear, tolerance, name + " high-level face shear");
 
-  geodesic_draping::FastDrapeOptions fastOptions;
-  fastOptions.mode = geodesic_draping::FastDrapeMode::HybridDistances;
-  const auto fastWithDistances = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options, fastOptions);
-  requireNearArray(fastWithDistances.distances[0], referenceDistances[0], 1e-8, name + " custom dist_0");
-  requireNearArray(fastWithDistances.distances[1], referenceDistances[1], 1e-8, name + " custom dist_1");
-  requireNearArray(fastWithDistances.faceShearAnglesDegrees,
-                   fast.faceShearAnglesDegrees,
+  geodesic_draping::DrapeSolveOptions sampledFastOptions;
+  sampledFastOptions.sampleSecondaryShear = true;
+  const auto sampledFast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, sampledFastOptions);
+  assert(sampledFast.vertexShearAnglesDegrees);
+  requireNearArray(*sampledFast.vertexShearAnglesDegrees, vertexShear, tolerance, name + " sampled fast vertex shear");
+
+  geodesic_draping::DrapeSolveOptions hybridOptions;
+  hybridOptions.mode = geodesic_draping::DrapeSolveMode::Hybrid;
+  const auto hybrid = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, hybridOptions);
+  geodesic_draping::DrapeSolveOptions completeOptions;
+  completeOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
+  const auto complete = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, completeOptions);
+  assert(hybrid.distances);
+  assert(complete.distances);
+  assert(!hybrid.gradients);
+  assert(hybrid.faceShearAnglesDegrees);
+  assert(!hybrid.vertexShearAnglesDegrees);
+  requireNearArray((*hybrid.distances)[0], (*complete.distances)[0], 1e-12, name + " one-shot hybrid dist_0");
+  requireNearArray((*hybrid.distances)[1], (*complete.distances)[1], 1e-12, name + " one-shot hybrid dist_1");
+  requireNearArray(*hybrid.faceShearAnglesDegrees,
+                   *fast.faceShearAnglesDegrees,
                    tolerance,
-                   name + " hybrid preserves face shear");
-  requireNearArray(fastWithDistances.vertexShearAnglesDegrees,
-                   fast.vertexShearAnglesDegrees,
+                   name + " one-shot hybrid preserves face shear");
+  hybridOptions.sampleSecondaryShear = true;
+  const auto sampledHybrid = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, hybridOptions);
+  assert(sampledHybrid.vertexShearAnglesDegrees);
+  requireNearArray(*sampledHybrid.vertexShearAnglesDegrees,
+                   *sampledFast.vertexShearAnglesDegrees,
                    tolerance,
-                   name + " hybrid preserves vertex shear");
+                   name + " one-shot hybrid samples vertex shear");
 
   geodesic_draping::GeoDrapeSolver solver(mesh, options);
-  const auto first = solver.solveFast(seedXY, angleDegrees);
-  const auto second = solver.solveFast(seedXY, angleDegrees);
-  requireNearArray(second.faceShearAnglesDegrees, first.faceShearAnglesDegrees, 1e-12, name + " persistent fast face shear");
-  requireNearArray(second.vertexShearAnglesDegrees, first.vertexShearAnglesDegrees, 1e-12, name + " persistent fast vertex shear");
+  const auto first = solver.solve(seedXY, angleDegrees, sampledFastOptions);
+  const auto second = solver.solve(seedXY, angleDegrees, sampledFastOptions);
+  assert(first.faceShearAnglesDegrees && second.faceShearAnglesDegrees);
+  assert(first.vertexShearAnglesDegrees && second.vertexShearAnglesDegrees);
+  requireNearArray(*second.faceShearAnglesDegrees, *first.faceShearAnglesDegrees, 1e-12, name + " persistent fast face shear");
+  requireNearArray(*second.vertexShearAnglesDegrees, *first.vertexShearAnglesDegrees, 1e-12, name + " persistent fast vertex shear");
 }
 
 void testFastFinite(const std::filesystem::path& root, const std::string& name) {
@@ -133,10 +155,14 @@ void testFastFinite(const std::filesystem::path& root, const std::string& name) 
   const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
   const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
   const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
-  const auto fast = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions());
+  geodesic_draping::DrapeSolveOptions options;
+  options.sampleSecondaryShear = true;
+  const auto fast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions(), options);
 
-  if (fast.faceShearAnglesDegrees.size() != mesh.faces.size() ||
-      fast.vertexShearAnglesDegrees.size() != mesh.vertices.size()) {
+  if (!fast.faceShearAnglesDegrees ||
+      !fast.vertexShearAnglesDegrees ||
+      fast.faceShearAnglesDegrees->size() != mesh.faces.size() ||
+      fast.vertexShearAnglesDegrees->size() != mesh.vertices.size()) {
     throw std::runtime_error(name + " fast output sizes do not match mesh");
   }
   for (const auto& field : fast.faceDirections) {
@@ -149,12 +175,12 @@ void testFastFinite(const std::filesystem::path& root, const std::string& name) 
       }
     }
   }
-  for (double value : fast.faceShearAnglesDegrees) {
+  for (double value : *fast.faceShearAnglesDegrees) {
     if (!std::isfinite(value)) {
       throw std::runtime_error(name + " fast face shear contains non-finite values");
     }
   }
-  for (double value : fast.vertexShearAnglesDegrees) {
+  for (double value : *fast.vertexShearAnglesDegrees) {
     if (!std::isfinite(value)) {
       throw std::runtime_error(name + " fast vertex shear contains non-finite values");
     }

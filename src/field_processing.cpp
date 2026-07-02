@@ -133,4 +133,19 @@ std::vector<double> averageFaceScalarsToVertices(const SurfaceMeshData& mesh,
   return accumulated;
 }
 
+std::vector<double> averageVertexScalarsToFaces(const SurfaceMeshData& mesh,
+                                                const std::vector<double>& vertexScalars) {
+  if (mesh.vertices.size() != vertexScalars.size()) {
+    throw std::runtime_error("averageVertexScalarsToFaces requires one scalar per vertex");
+  }
+
+  std::vector<double> faceScalars;
+  faceScalars.reserve(mesh.faces.size());
+  for (const Face& face : mesh.faces) {
+    faceScalars.push_back(
+        (vertexScalars[face[0]] + vertexScalars[face[1]] + vertexScalars[face[2]]) / 3.0);
+  }
+  return faceScalars;
+}
+
 } // namespace geodesic_draping
