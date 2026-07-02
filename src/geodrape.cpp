@@ -80,6 +80,15 @@ FastDrapeResult GeoDrapeSolver::solveFast(const Vec2& seedXY,
   return result;
 }
 
+DrapeResult solveDrape(const SurfaceMeshData& mesh,
+                       const Vec2& seedXY,
+                       double angleDegrees,
+                       const SignedHeatSolveOptions& heatOptions,
+                       const DrapeSolveOptions& solveOptions) {
+  GeoDrapeSolver solver(mesh, heatOptions);
+  return solver.solve(seedXY, angleDegrees, solveOptions);
+}
+
 CompleteDrapeResult solveCompleteDrape(const SurfaceMeshData& mesh,
                                        const Vec2& seedXY,
                                        double angleDegrees,

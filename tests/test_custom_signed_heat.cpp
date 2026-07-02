@@ -111,9 +111,16 @@ void testFixture(const std::filesystem::path& root,
   geodesic_draping::DrapeSolveOptions hybridOptions;
   hybridOptions.mode = geodesic_draping::DrapeSolveMode::Hybrid;
   const auto fastWithDistances = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options, hybridOptions);
+  const auto hybrid = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, hybridOptions);
   const auto complete = geodesic_draping::solveCompleteDrape(mesh, seedXY, angleDegrees, options);
   requireNearArray(fastWithDistances.distances[0], complete.distances[0], 1e-12, name + " hybrid dist_0");
   requireNearArray(fastWithDistances.distances[1], complete.distances[1], 1e-12, name + " hybrid dist_1");
+  requireNearArray(hybrid.distances[0], complete.distances[0], 1e-12, name + " one-shot hybrid dist_0");
+  requireNearArray(hybrid.distances[1], complete.distances[1], 1e-12, name + " one-shot hybrid dist_1");
+  requireNearArray(hybrid.faceShearAnglesDegrees,
+                   fast.faceShearAnglesDegrees,
+                   tolerance,
+                   name + " one-shot hybrid preserves face shear");
   requireNearArray(fastWithDistances.faceShearAnglesDegrees,
                    fast.faceShearAnglesDegrees,
                    tolerance,

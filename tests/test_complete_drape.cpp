@@ -77,6 +77,24 @@ void testPersistentSolver(const std::filesystem::path& root, const std::string& 
   requireNearArray(second.shearAnglesDegrees, first.shearAnglesDegrees, 1e-12, name + " persistent complete shear");
 }
 
+void testOneShotComplete(const std::filesystem::path& root, const std::string& name) {
+  const std::filesystem::path fixtureDir = root / name;
+  const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
+  const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
+  const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
+  geodesic_draping::DrapeSolveOptions solveOptions;
+  solveOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
+
+  const auto oneShot = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions(), solveOptions);
+  const auto complete = geodesic_draping::solveCompleteDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions());
+  requireNearArray(oneShot.distances[0], complete.distances[0], 1e-12, name + " one-shot complete dist_0");
+  requireNearArray(oneShot.distances[1], complete.distances[1], 1e-12, name + " one-shot complete dist_1");
+  requireNearArray(oneShot.vertexShearAnglesDegrees,
+                   complete.shearAnglesDegrees,
+                   1e-12,
+                   name + " one-shot complete shear");
+}
+
 } // namespace
 
 int main() {
@@ -111,6 +129,7 @@ int main() {
   const auto demo = solveFixture(fixtureRoot, "demo_part");
   requireFinite(demo, geodesic_draping::fixture_io::loadMesh(fixtureRoot / "demo_part").vertices.size());
   testPersistentSolver(fixtureRoot, "demo_part");
+  testOneShotComplete(fixtureRoot, "tiny_planar");
 
   return 0;
 }

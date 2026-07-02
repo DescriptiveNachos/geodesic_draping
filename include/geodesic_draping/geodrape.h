@@ -74,6 +74,12 @@ private:
   CustomSignedHeatSolver customHeatSolver_;
 };
 
+DrapeResult solveDrape(const SurfaceMeshData& mesh,
+                       const Vec2& seedXY,
+                       double angleDegrees,
+                       const SignedHeatSolveOptions& heatOptions = {},
+                       const DrapeSolveOptions& solveOptions = {});
+
 CompleteDrapeResult solveCompleteDrape(const SurfaceMeshData& mesh,
                                        const Vec2& seedXY,
                                        double angleDegrees,
