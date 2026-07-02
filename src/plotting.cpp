@@ -1,6 +1,8 @@
 #include "geodesic_draping/plotting.h"
 
 #include "geodesic_draping/diagnostics.h"
+#include "geodesic_draping/field_processing.h"
+#include "geodesic_draping/geometrycentral_adapter.h"
 
 #include <stdexcept>
 
@@ -81,9 +83,12 @@ struct DrapeComparisonQuantities {
   polyscope::Quantity* fastGradient0Deviation = nullptr;
   polyscope::Quantity* fastGradient1Deviation = nullptr;
   polyscope::Quantity* fastShear = nullptr;
+  polyscope::Quantity* fastProjectedAreaShear = nullptr;
+  polyscope::Quantity* fastProjectedAngleShear = nullptr;
   bool showFast = false;
   bool showVectors = false;
   int completeScalar = 0;
+  int fastScalar = 0;
 };
 
 void setEnabled(polyscope::Quantity* quantity, bool enabled) {
@@ -105,9 +110,13 @@ void applyDrapeComparisonDisplay(DrapeComparisonQuantities& quantities) {
   setEnabled(quantities.fastGradient0Deviation, false);
   setEnabled(quantities.fastGradient1Deviation, false);
   setEnabled(quantities.fastShear, false);
+  setEnabled(quantities.fastProjectedAreaShear, false);
+  setEnabled(quantities.fastProjectedAngleShear, false);
 
   if (quantities.showFast) {
-    setEnabled(quantities.fastShear, true);
+    setEnabled(quantities.fastShear, quantities.fastScalar == 0);
+    setEnabled(quantities.fastProjectedAreaShear, quantities.fastScalar == 1);
+    setEnabled(quantities.fastProjectedAngleShear, quantities.fastScalar == 2);
     setEnabled(quantities.fastGradient0, quantities.showVectors);
     setEnabled(quantities.fastGradient1, quantities.showVectors);
     setEnabled(quantities.fastGradient0Deviation, true);
@@ -284,6 +293,29 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
       "abs(|fast grad_1| - 1)", fastMagnitudeDiagnostics[1].absDeviationFromUnit);
   quantities->fastShear = psMesh->addVertexScalarQuantity(
       "fast shear_degrees", fastResult.shearAnglesDegrees);
+  GeometryCentralSurface surface = makeGeometryCentralSurface(mesh);
+  const std::vector<Vec3> projectedArea0 = averageFaceDirectionsToVerticesProjected(
+      surface,
+      fastResult.customHeatSolves[0].normalizedFaceDirections,
+      VertexDirectionAveraging::FaceArea);
+  const std::vector<Vec3> projectedArea1 = averageFaceDirectionsToVerticesProjected(
+      surface,
+      fastResult.customHeatSolves[1].normalizedFaceDirections,
+      VertexDirectionAveraging::FaceArea);
+  const std::vector<Vec3> projectedAngle0 = averageFaceDirectionsToVerticesProjected(
+      surface,
+      fastResult.customHeatSolves[0].normalizedFaceDirections,
+      VertexDirectionAveraging::CornerAngle);
+  const std::vector<Vec3> projectedAngle1 = averageFaceDirectionsToVerticesProjected(
+      surface,
+      fastResult.customHeatSolves[1].normalizedFaceDirections,
+      VertexDirectionAveraging::CornerAngle);
+  quantities->fastProjectedAreaShear = psMesh->addVertexScalarQuantity(
+      "fast projected area shear_degrees",
+      computeShearAnglesDegrees(projectedArea0, projectedArea1));
+  quantities->fastProjectedAngleShear = psMesh->addVertexScalarQuantity(
+      "fast projected corner-angle shear_degrees",
+      computeShearAnglesDegrees(projectedAngle0, projectedAngle1));
   applyDrapeComparisonDisplay(*quantities);
 
   registerSeedDirectionsAndGenerators(options.name,
@@ -303,7 +335,10 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
       changed |= ImGui::RadioButton("dist_0", &quantities->completeScalar, 1);
       changed |= ImGui::RadioButton("dist_1", &quantities->completeScalar, 2);
     } else {
-      ImGui::TextUnformatted("Fast mode displays fast shear");
+      ImGui::TextUnformatted("Fast scalar field");
+      changed |= ImGui::RadioButton("reference shear", &quantities->fastScalar, 0);
+      changed |= ImGui::RadioButton("projected area shear", &quantities->fastScalar, 1);
+      changed |= ImGui::RadioButton("projected corner-angle shear", &quantities->fastScalar, 2);
     }
 
     if (changed) {

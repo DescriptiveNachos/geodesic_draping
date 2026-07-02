@@ -69,6 +69,26 @@ void testFixture(const std::filesystem::path& root,
     throw std::runtime_error(name + " fast heat intermediate sizes do not match mesh");
   }
 
+  const auto projectedArea = geodesic_draping::averageFaceDirectionsToVerticesProjected(
+      surface,
+      heat[0].normalizedFaceDirections,
+      geodesic_draping::VertexDirectionAveraging::FaceArea);
+  const auto projectedAngle = geodesic_draping::averageFaceDirectionsToVerticesProjected(
+      surface,
+      heat[0].normalizedFaceDirections,
+      geodesic_draping::VertexDirectionAveraging::CornerAngle);
+  if (projectedArea.size() != mesh.vertices.size() || projectedAngle.size() != mesh.vertices.size()) {
+    throw std::runtime_error(name + " projected vertex directions do not match mesh");
+  }
+  for (const auto& field : {projectedArea, projectedAngle}) {
+    for (const auto& vector : field) {
+      const double norm = vector.norm();
+      if (!std::isfinite(norm) || std::abs(norm - 1.0) > 1e-10) {
+        throw std::runtime_error(name + " projected vertex direction is not finite and unit length");
+      }
+    }
+  }
+
   const auto fast = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options);
   requireNearVectorArray(fast.gradients[0],
                          geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_0"),
