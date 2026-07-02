@@ -48,11 +48,12 @@ FastDrapeResult GeoDrapeSolver::solveFast(const Vec2& seedXY,
 
   result.generators = traceGenerators(surface_, result.seed.surfacePoint, result.directions);
   result.sourceCurves = pairOppositeGeneratorTraces(result.generators);
+  const bool computeDistances = fastOptions.mode == FastDrapeMode::HybridDistances;
   for (size_t i = 0; i < result.customHeatSolves.size(); ++i) {
     result.customHeatSolves[i] =
-        customHeatSolver_.solve(result.sourceCurves.curves[i], heatOptions_, fastOptions.returnDistances);
+        customHeatSolver_.solve(result.sourceCurves.curves[i], heatOptions_, computeDistances);
     result.faceDirections[i] = result.customHeatSolves[i].normalizedFaceDirections;
-    if (fastOptions.returnDistances) {
+    if (computeDistances) {
       result.distances[i] = result.customHeatSolves[i].distance;
     }
   }

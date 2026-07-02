@@ -108,10 +108,18 @@ void testFixture(const std::filesystem::path& root,
   requireNearArray(fast.vertexShearAnglesDegrees, vertexShear, tolerance, name + " high-level vertex shear");
 
   geodesic_draping::FastDrapeOptions fastOptions;
-  fastOptions.returnDistances = true;
+  fastOptions.mode = geodesic_draping::FastDrapeMode::HybridDistances;
   const auto fastWithDistances = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options, fastOptions);
   requireNearArray(fastWithDistances.distances[0], referenceDistances[0], 1e-8, name + " custom dist_0");
   requireNearArray(fastWithDistances.distances[1], referenceDistances[1], 1e-8, name + " custom dist_1");
+  requireNearArray(fastWithDistances.faceShearAnglesDegrees,
+                   fast.faceShearAnglesDegrees,
+                   tolerance,
+                   name + " hybrid preserves face shear");
+  requireNearArray(fastWithDistances.vertexShearAnglesDegrees,
+                   fast.vertexShearAnglesDegrees,
+                   tolerance,
+                   name + " hybrid preserves vertex shear");
 
   geodesic_draping::GeoDrapeSolver solver(mesh, options);
   const auto first = solver.solveFast(seedXY, angleDegrees);

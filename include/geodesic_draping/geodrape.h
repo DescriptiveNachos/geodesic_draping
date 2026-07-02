@@ -32,8 +32,13 @@ struct FastDrapeResult {
   std::vector<double> vertexShearAnglesDegrees;
 };
 
+enum class FastDrapeMode {
+  FaceShearOnly,
+  HybridDistances,
+};
+
 struct FastDrapeOptions {
-  bool returnDistances = false;
+  FastDrapeMode mode = FastDrapeMode::FaceShearOnly;
 };
 
 class GeoDrapeSolver {
