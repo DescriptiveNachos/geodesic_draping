@@ -25,6 +25,7 @@ add_library(geodesic_draping
   src/geometrycentral_adapter.cpp
   src/generator_tracing.cpp
   src/plotting.cpp
+  src/quality.cpp
   src/seed_projection.cpp
   src/signed_heat.cpp
   src/custom_signed_heat.cpp
@@ -159,6 +160,19 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
     PRIVATE
       GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
   add_test(NAME test_diagnostics COMMAND test_diagnostics)
+
+  add_executable(test_quality
+    tests/test_quality.cpp)
+  target_link_libraries(test_quality
+    PRIVATE
+      geodesic_draping)
+  target_include_directories(test_quality
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+  target_compile_definitions(test_quality
+    PRIVATE
+      GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+  add_test(NAME test_quality COMMAND test_quality)
 
   add_executable(test_complete_drape
     tests/test_complete_drape.cpp)
