@@ -51,12 +51,12 @@ FastDrapeResult GeoDrapeSolver::solveFast(const Vec2& seedXY, double angleDegree
         customHeatSolver_.solveDiffusedEdgeHeatField(result.sourceCurves.curves[i], heatOptions_);
     result.customHeatSolves[i].normalizedFaceDirections =
         sampleAndNormalizeFaceDirections(surface_, result.customHeatSolves[i].diffusion.diffusedEdgeHeatField);
-    result.customHeatSolves[i].vertexDirections =
-        averageFaceDirectionsToVerticesReference(surface_, result.customHeatSolves[i].normalizedFaceDirections);
+    result.faceDirections[i] = result.customHeatSolves[i].normalizedFaceDirections;
   }
-  result.gradients[0] = result.customHeatSolves[0].vertexDirections;
-  result.gradients[1] = result.customHeatSolves[1].vertexDirections;
-  result.shearAnglesDegrees = computeShearAnglesDegrees(result.gradients[0], result.gradients[1]);
+  result.faceShearAnglesDegrees =
+      computeFaceShearAnglesDegrees(surface_, result.faceDirections[0], result.faceDirections[1]);
+  result.vertexShearAnglesDegrees =
+      averageFaceScalarsToVertices(meshData_, result.faceShearAnglesDegrees, FaceScalarAveraging::FaceArea);
 
   return result;
 }

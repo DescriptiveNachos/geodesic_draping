@@ -4,7 +4,6 @@
 #include "geometrycentral/surface/barycentric_vector.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -46,16 +45,6 @@ Vec3 fromGcVector3(const gc::Vector3& value) {
 
 Eigen::Index eigenIndex(size_t value) {
   return static_cast<Eigen::Index>(value);
-}
-
-double cornerAngle(const gc::Vector3& center, const gc::Vector3& pA, const gc::Vector3& pB) {
-  const gc::Vector3 u = pA - center;
-  const gc::Vector3 v = pB - center;
-  const double denom = norm(u) * norm(v);
-  if (denom == 0.0) {
-    return 0.0;
-  }
-  return std::acos(std::clamp(dot(u, v) / denom, -1.0, 1.0));
 }
 
 gc::Vector3 faceVectorToExtrinsic(const gcs::Face& face,
@@ -514,111 +503,6 @@ FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& 
   return normalized;
 }
 
-std::vector<Vec3> averageFaceDirectionsToVerticesReference(
-    GeometryCentralSurface& surface,
-    const FaceHeatDirectionField& normalizedFaceDirections) {
-  auto& mesh = *surface.mesh;
-  auto& geometry = *surface.geometry;
-  if (normalizedFaceDirections.size() != mesh.nFaces()) {
-    throw std::runtime_error("averageFaceDirectionsToVerticesReference requires one direction per face");
-  }
-
-  geometry.requireFaceAreas();
-  geometry.requireVertexPositions();
-  std::vector<Vec3> vertexVectors(mesh.nVertices(), Vec3::Zero());
-  for (gcs::Vertex vertex : mesh.vertices()) {
-    gc::Vector3 average{0.0, 0.0, 0.0};
-    double totalArea = 0.0;
-    for (gcs::Face face : vertex.adjacentFaces()) {
-      const Vec3& coords = normalizedFaceDirections[face.getIndex()];
-      const gcs::SurfacePoint point(face, gc::Vector3{coords.x(), coords.y(), coords.z()});
-      const double area = geometry.faceAreas[face];
-      average += area * point.interpolate(geometry.vertexPositions);
-      totalArea += area;
-    }
-    if (totalArea > 0.0) {
-      average /= totalArea;
-    }
-    vertexVectors[vertex.getIndex()] = fromGcVector3(average);
-  }
-  geometry.unrequireFaceAreas();
-  geometry.unrequireVertexPositions();
-  return vertexVectors;
-}
-
-std::vector<Vec3> averageFaceDirectionsToVerticesProjected(
-    GeometryCentralSurface& surface,
-    const FaceHeatDirectionField& normalizedFaceDirections,
-    VertexDirectionAveraging averaging) {
-  auto& mesh = *surface.mesh;
-  auto& geometry = *surface.geometry;
-  if (normalizedFaceDirections.size() != mesh.nFaces()) {
-    throw std::runtime_error("averageFaceDirectionsToVerticesProjected requires one direction per face");
-  }
-
-  geometry.requireFaceAreas();
-  geometry.requireVertexPositions();
-
-  std::vector<gc::Vector3> accumulated(mesh.nVertices(), gc::Vector3{0.0, 0.0, 0.0});
-  std::vector<gc::Vector3> accumulatedNormals(mesh.nVertices(), gc::Vector3{0.0, 0.0, 0.0});
-  std::vector<double> totalWeights(mesh.nVertices(), 0.0);
-
-  for (gcs::Face face : mesh.faces()) {
-    const Vec3& coords = normalizedFaceDirections[face.getIndex()];
-    const gc::Vector3 faceVector = faceVectorToExtrinsic(face, coords, geometry);
-
-    std::array<gcs::Vertex, 3> vertices;
-    std::array<gc::Vector3, 3> positions;
-    size_t localIndex = 0;
-    for (gcs::Vertex vertex : face.adjacentVertices()) {
-      vertices[localIndex] = vertex;
-      positions[localIndex] = geometry.vertexPositions[vertex];
-      ++localIndex;
-    }
-
-    const gc::Vector3 faceNormal = cross(positions[1] - positions[0], positions[2] - positions[0]);
-    const double faceArea = 0.5 * norm(faceNormal);
-    if (faceArea == 0.0) {
-      continue;
-    }
-
-    for (size_t i = 0; i < vertices.size(); ++i) {
-      double weight = faceArea;
-      if (averaging == VertexDirectionAveraging::CornerAngle) {
-        weight = cornerAngle(positions[i], positions[(i + 1) % 3], positions[(i + 2) % 3]);
-      }
-      const size_t vertexIndex = vertices[i].getIndex();
-      accumulated[vertexIndex] += weight * faceVector;
-      accumulatedNormals[vertexIndex] += faceNormal;
-      totalWeights[vertexIndex] += weight;
-    }
-  }
-
-  std::vector<Vec3> vertexVectors(mesh.nVertices(), Vec3::Zero());
-  for (gcs::Vertex vertex : mesh.vertices()) {
-    const size_t vertexIndex = vertex.getIndex();
-    if (totalWeights[vertexIndex] == 0.0) {
-      continue;
-    }
-
-    gc::Vector3 vector = accumulated[vertexIndex] / totalWeights[vertexIndex];
-    const double normalNorm = norm(accumulatedNormals[vertexIndex]);
-    if (normalNorm > 0.0) {
-      const gc::Vector3 normal = accumulatedNormals[vertexIndex] / normalNorm;
-      vector -= dot(vector, normal) * normal;
-    }
-    const double vectorNorm = norm(vector);
-    if (vectorNorm > 0.0) {
-      vector /= vectorNorm;
-    }
-    vertexVectors[vertexIndex] = fromGcVector3(vector);
-  }
-
-  geometry.unrequireFaceAreas();
-  geometry.unrequireVertexPositions();
-  return vertexVectors;
-}
-
 std::vector<Vec3> faceDirectionsToExtrinsicVectors(
     GeometryCentralSurface& surface,
     const FaceHeatDirectionField& normalizedFaceDirections) {
@@ -677,8 +561,6 @@ CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface&
   result.diffusion = solver.solveDiffusedEdgeHeatField(sourceCurve, options);
   result.normalizedFaceDirections =
       sampleAndNormalizeFaceDirections(surface, result.diffusion.diffusedEdgeHeatField);
-  result.vertexDirections =
-      averageFaceDirectionsToVerticesReference(surface, result.normalizedFaceDirections);
   return result;
 }
 
@@ -691,8 +573,6 @@ std::array<CustomSignedHeatResult, 2> computeCustomSignedHeatDirections(Geometry
     results[i].diffusion = solver.solveDiffusedEdgeHeatField(sourceCurves.curves[i], options);
     results[i].normalizedFaceDirections =
         sampleAndNormalizeFaceDirections(surface, results[i].diffusion.diffusedEdgeHeatField);
-    results[i].vertexDirections =
-        averageFaceDirectionsToVerticesReference(surface, results[i].normalizedFaceDirections);
   }
   return results;
 }

@@ -64,13 +64,4 @@ std::array<VectorMagnitudeDiagnostics, 2> analyzeCompleteGradientMagnitudes(
   };
 }
 
-std::array<VectorMagnitudeDiagnostics, 2> analyzeFastGradientMagnitudes(
-    const FastDrapeResult& result,
-    double nearZeroEpsilon) {
-  return {
-      analyzeVectorMagnitudes(result.gradients[0], nearZeroEpsilon),
-      analyzeVectorMagnitudes(result.gradients[1], nearZeroEpsilon),
-  };
-}
-
 } // namespace geodesic_draping

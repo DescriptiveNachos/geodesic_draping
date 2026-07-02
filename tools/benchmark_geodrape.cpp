@@ -180,14 +180,19 @@ StepTimings runFastOnce(const geodesic_draping::SurfaceMeshData& mesh,
     heats[i].diffusion = customHeatSolver.solveDiffusedEdgeHeatField(sourceCurves.curves[i], fixtureHeatOptions());
     heats[i].normalizedFaceDirections =
         geodesic_draping::sampleAndNormalizeFaceDirections(surface, heats[i].diffusion.diffusedEdgeHeatField);
-    heats[i].vertexDirections =
-        geodesic_draping::averageFaceDirectionsToVerticesReference(surface, heats[i].normalizedFaceDirections);
   }
   timings.heatSeconds = secondsSince(phaseStart);
 
   phaseStart = Clock::now();
-  const auto shear = geodesic_draping::computeShearAnglesDegrees(heats[0].vertexDirections, heats[1].vertexDirections);
-  (void)shear;
+  const auto faceShear = geodesic_draping::computeFaceShearAnglesDegrees(
+      surface,
+      heats[0].normalizedFaceDirections,
+      heats[1].normalizedFaceDirections);
+  const auto vertexShear = geodesic_draping::averageFaceScalarsToVertices(
+      mesh,
+      faceShear,
+      geodesic_draping::FaceScalarAveraging::FaceArea);
+  (void)vertexShear;
   timings.fieldsSeconds = secondsSince(phaseStart);
 
   timings.solveSeconds = secondsSince(solveStart);

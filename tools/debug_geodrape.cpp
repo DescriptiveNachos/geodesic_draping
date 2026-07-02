@@ -239,63 +239,21 @@ int main(int argc, char** argv) {
                           result.shearAnglesDegrees,
                           geodesic_draping::fixture_io::loadGoldenShearArray(fixtureDir, "complete"));
     std::cout << "\n";
-    printStats("fast_shear", fastResult.shearAnglesDegrees);
-    printVectorArrayComparison("fast grad_0",
-                               fastResult.gradients[0],
-                               geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_0"));
-    printVectorArrayComparison("fast grad_1",
-                               fastResult.gradients[1],
-                               geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_1"));
-    printScalarComparison("fast shear",
-                          fastResult.shearAnglesDegrees,
-                          geodesic_draping::fixture_io::loadGoldenShearArray(fixtureDir, "fast"));
+    printStats("fast_face_shear", fastResult.faceShearAnglesDegrees);
+    printStats("fast_vertex_shear", fastResult.vertexShearAnglesDegrees);
     std::cout << "\n";
     const auto completeMagnitudeDiagnostics =
         geodesic_draping::analyzeCompleteGradientMagnitudes(result);
-    const auto fastMagnitudeDiagnostics =
-        geodesic_draping::analyzeFastGradientMagnitudes(fastResult);
     printMagnitudeDiagnostics("complete grad_0", completeMagnitudeDiagnostics[0]);
     printMagnitudeDiagnostics("complete grad_1", completeMagnitudeDiagnostics[1]);
-    printMagnitudeDiagnostics("fast grad_0", fastMagnitudeDiagnostics[0]);
-    printMagnitudeDiagnostics("fast grad_1", fastMagnitudeDiagnostics[1]);
 
     auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
-    const auto projectedArea0 = geodesic_draping::averageFaceDirectionsToVerticesProjected(
-        surface,
-        fastResult.customHeatSolves[0].normalizedFaceDirections,
-        geodesic_draping::VertexDirectionAveraging::FaceArea);
-    const auto projectedArea1 = geodesic_draping::averageFaceDirectionsToVerticesProjected(
-        surface,
-        fastResult.customHeatSolves[1].normalizedFaceDirections,
-        geodesic_draping::VertexDirectionAveraging::FaceArea);
-    const auto projectedAngle0 = geodesic_draping::averageFaceDirectionsToVerticesProjected(
-        surface,
-        fastResult.customHeatSolves[0].normalizedFaceDirections,
-        geodesic_draping::VertexDirectionAveraging::CornerAngle);
-    const auto projectedAngle1 = geodesic_draping::averageFaceDirectionsToVerticesProjected(
-        surface,
-        fastResult.customHeatSolves[1].normalizedFaceDirections,
-        geodesic_draping::VertexDirectionAveraging::CornerAngle);
-    const auto projectedAreaShear =
-        geodesic_draping::computeShearAnglesDegrees(projectedArea0, projectedArea1);
-    const auto projectedAngleShear =
-        geodesic_draping::computeShearAnglesDegrees(projectedAngle0, projectedAngle1);
-    printMagnitudeDiagnostics("proj area grad_0", geodesic_draping::analyzeVectorMagnitudes(projectedArea0));
-    printMagnitudeDiagnostics("proj area grad_1", geodesic_draping::analyzeVectorMagnitudes(projectedArea1));
-    printShearSummary("proj area", projectedAreaShear);
-    printMagnitudeDiagnostics("proj angle grad_0", geodesic_draping::analyzeVectorMagnitudes(projectedAngle0));
-    printMagnitudeDiagnostics("proj angle grad_1", geodesic_draping::analyzeVectorMagnitudes(projectedAngle1));
-    printShearSummary("proj angle", projectedAngleShear);
-    const auto faceShear = geodesic_draping::computeFaceShearAnglesDegrees(
-        surface,
-        fastResult.customHeatSolves[0].normalizedFaceDirections,
-        fastResult.customHeatSolves[1].normalizedFaceDirections);
-    const auto averagedFaceShear = geodesic_draping::averageFaceScalarsToVertices(
-        mesh,
-        faceShear,
-        geodesic_draping::FaceScalarAveraging::FaceArea);
-    printShearSummary("face", faceShear);
-    printShearSummary("face averaged", averagedFaceShear);
+    const auto faceDirections0 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fastResult.faceDirections[0]);
+    const auto faceDirections1 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fastResult.faceDirections[1]);
+    printMagnitudeDiagnostics("fast face dir_0", geodesic_draping::analyzeVectorMagnitudes(faceDirections0));
+    printMagnitudeDiagnostics("fast face dir_1", geodesic_draping::analyzeVectorMagnitudes(faceDirections1));
+    printShearSummary("fast face", fastResult.faceShearAnglesDegrees);
+    printShearSummary("fast vertex", fastResult.vertexShearAnglesDegrees);
 
     ProjectionPlotOptions options;
     options.name = fixtureName + " drape comparison";

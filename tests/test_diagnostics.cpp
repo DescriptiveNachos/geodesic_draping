@@ -1,6 +1,7 @@
 #include "fixture_io.h"
 #include "geodesic_draping/diagnostics.h"
 
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <filesystem>
@@ -58,7 +59,13 @@ void testFixtureSmoke(const std::filesystem::path& fixtureRoot) {
   const auto complete = geodesic_draping::solveCompleteDrape(mesh, seedXY, angleDegrees, options);
   const auto fast = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options);
   const auto completeDiagnostics = geodesic_draping::analyzeCompleteGradientMagnitudes(complete);
-  const auto fastDiagnostics = geodesic_draping::analyzeFastGradientMagnitudes(fast);
+  auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
+  const std::array<geodesic_draping::VectorMagnitudeDiagnostics, 2> fastDiagnostics{
+      geodesic_draping::analyzeVectorMagnitudes(
+          geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fast.faceDirections[0])),
+      geodesic_draping::analyzeVectorMagnitudes(
+          geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fast.faceDirections[1])),
+  };
 
   for (const auto& diagnostic : completeDiagnostics) {
     assert(diagnostic.magnitudes.size() == mesh.vertices.size());
@@ -66,8 +73,8 @@ void testFixtureSmoke(const std::filesystem::path& fixtureRoot) {
     assert(std::isfinite(diagnostic.stats.maxAbsDeviationFromUnit));
   }
   for (const auto& diagnostic : fastDiagnostics) {
-    assert(diagnostic.magnitudes.size() == mesh.vertices.size());
-    assert(diagnostic.stats.finiteCount == mesh.vertices.size());
+    assert(diagnostic.magnitudes.size() == mesh.faces.size());
+    assert(diagnostic.stats.finiteCount == mesh.faces.size());
     assert(std::isfinite(diagnostic.stats.maxAbsDeviationFromUnit));
   }
 }

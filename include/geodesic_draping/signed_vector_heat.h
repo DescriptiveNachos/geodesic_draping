@@ -26,7 +26,6 @@ struct DiffusedHeatFieldResult {
 struct CustomSignedHeatResult {
   DiffusedHeatFieldResult diffusion;
   FaceHeatDirectionField normalizedFaceDirections;
-  std::vector<Vec3> vertexDirections;
 };
 
 class CustomSignedHeatSolver {
@@ -79,15 +78,6 @@ private:
 
 FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& surface,
                                                         const EdgeHeatField& diffusedEdgeHeatField);
-
-std::vector<Vec3> averageFaceDirectionsToVerticesReference(
-    GeometryCentralSurface& surface,
-    const FaceHeatDirectionField& normalizedFaceDirections);
-
-std::vector<Vec3> averageFaceDirectionsToVerticesProjected(
-    GeometryCentralSurface& surface,
-    const FaceHeatDirectionField& normalizedFaceDirections,
-    VertexDirectionAveraging averaging = VertexDirectionAveraging::FaceArea);
 
 std::vector<Vec3> faceDirectionsToExtrinsicVectors(
     GeometryCentralSurface& surface,
