@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace geodesic_draping {
@@ -80,8 +81,14 @@ std::vector<double> computeShearAnglesDegrees(const std::vector<Vec3>& gradients
   for (size_t i = 0; i < gradients0.size(); ++i) {
     const double norm0 = gradients0[i].norm();
     const double norm1 = gradients1[i].norm();
-    const double cosTheta = std::clamp(gradients1[i].dot(gradients0[i]) / (norm0 * norm1), -1.0, 1.0);
-    shear.push_back(std::abs((std::acos(cosTheta) * 180.0 / pi) - 90.0));
+    if (norm0 == 0.0 || norm1 == 0.0) {
+      shear.push_back(std::numeric_limits<double>::quiet_NaN());
+      continue;
+    }
+    const double dotProduct = gradients0[i].dot(gradients1[i]);
+    const double determinantMagnitude = gradients0[i].cross(gradients1[i]).norm();
+    const double theta = std::atan2(determinantMagnitude, dotProduct);
+    shear.push_back(std::abs((theta * 180.0 / pi) - 90.0));
   }
   return shear;
 }

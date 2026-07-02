@@ -168,6 +168,13 @@ void testAnalyticFaceShear() {
     throw std::runtime_error("parallel analytic face shear should be ninety degrees");
   }
 
+  const geodesic_draping::FaceHeatDirectionField negativeXDirection{{1.0, -1.0, 0.0}};
+  const auto oppositeShear =
+      geodesic_draping::computeFaceShearAnglesDegrees(surface, xDirection, negativeXDirection);
+  if (oppositeShear.size() != 1 || std::abs(oppositeShear[0] - 90.0) > 1e-12) {
+    throw std::runtime_error("opposite analytic face shear should be ninety degrees");
+  }
+
   const auto extrinsic = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, xDirection);
   if (extrinsic.size() != 1 || (extrinsic[0] - geodesic_draping::Vec3{1.0, 0.0, 0.0}).norm() > 1e-12) {
     throw std::runtime_error("analytic face direction should convert to the expected extrinsic vector");

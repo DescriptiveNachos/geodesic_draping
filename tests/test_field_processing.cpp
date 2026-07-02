@@ -102,11 +102,30 @@ void testFaceScalarAveraging() {
   assert(threw);
 }
 
+void testVertexShearAngles() {
+  using geodesic_draping::Vec3;
+  const auto orthogonal = geodesic_draping::computeShearAnglesDegrees(
+      {Vec3{1.0, 0.0, 0.0}},
+      {Vec3{0.0, 1.0, 0.0}});
+  requireNearArray(orthogonal, {0.0}, 1e-12, "orthogonal vertex shear");
+
+  const auto parallel = geodesic_draping::computeShearAnglesDegrees(
+      {Vec3{1.0, 0.0, 0.0}},
+      {Vec3{2.0, 0.0, 0.0}});
+  requireNearArray(parallel, {90.0}, 1e-12, "parallel vertex shear");
+
+  const auto opposite = geodesic_draping::computeShearAnglesDegrees(
+      {Vec3{1.0, 0.0, 0.0}},
+      {Vec3{-2.0, 0.0, 0.0}});
+  requireNearArray(opposite, {90.0}, 1e-12, "opposite vertex shear");
+}
+
 } // namespace
 
 int main() {
   const std::filesystem::path fixtureRoot = GEODESIC_DRAPING_TEST_DATA_DIR;
   testFaceScalarAveraging();
+  testVertexShearAngles();
   testFixture(fixtureRoot, "tiny_planar");
   testFixture(fixtureRoot, "small_curved");
   testFixture(fixtureRoot, "demo_part");

@@ -540,15 +540,18 @@ std::vector<double> computeFaceShearAnglesDegrees(
     const Vec3& coords1 = normalizedFaceDirections1[face.getIndex()];
     const gcs::BarycentricVector u(face, gc::Vector3{coords0.x(), coords0.y(), coords0.z()});
     const gcs::BarycentricVector v(face, gc::Vector3{coords1.x(), coords1.y(), coords1.z()});
-    const double norm0 = u.norm(geometry);
-    const double norm1 = v.norm(geometry);
-    if (norm0 == 0.0 || norm1 == 0.0) {
+    const double normSquared0 = dot(geometry, u, u);
+    const double normSquared1 = dot(geometry, v, v);
+    if (normSquared0 == 0.0 || normSquared1 == 0.0) {
       shear[face.getIndex()] = std::numeric_limits<double>::quiet_NaN();
       continue;
     }
 
-    const double cosTheta = std::clamp(dot(geometry, u, v) / (norm0 * norm1), -1.0, 1.0);
-    shear[face.getIndex()] = std::abs((std::acos(cosTheta) * 180.0 / pi) - 90.0);
+    const double dotProduct = dot(geometry, u, v);
+    const double determinantMagnitude = std::sqrt(
+        std::max(0.0, normSquared0 * normSquared1 - dotProduct * dotProduct));
+    const double theta = std::atan2(determinantMagnitude, dotProduct);
+    shear[face.getIndex()] = std::abs((theta * 180.0 / pi) - 90.0);
   }
   return shear;
 }
