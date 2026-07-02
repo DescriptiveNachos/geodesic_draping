@@ -55,12 +55,12 @@ VectorMagnitudeDiagnostics analyzeVectorMagnitudes(const std::vector<Vec3>& vect
   return diagnostics;
 }
 
-std::array<VectorMagnitudeDiagnostics, 2> analyzeCompleteGradientMagnitudes(
-    const CompleteDrapeResult& result,
+std::array<VectorMagnitudeDiagnostics, 2> analyzeGradientMagnitudes(
+    const std::array<std::vector<Vec3>, 2>& gradients,
     double nearZeroEpsilon) {
   return {
-      analyzeVectorMagnitudes(result.gradients[0], nearZeroEpsilon),
-      analyzeVectorMagnitudes(result.gradients[1], nearZeroEpsilon),
+      analyzeVectorMagnitudes(gradients[0], nearZeroEpsilon),
+      analyzeVectorMagnitudes(gradients[1], nearZeroEpsilon),
   };
 }
 

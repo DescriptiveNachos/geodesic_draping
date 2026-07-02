@@ -24,13 +24,9 @@ void plotSeedProjectionStep(const SurfaceMeshData& mesh,
 void plotGeneratorTraces(const std::array<GeneratorTrace, 4>& traces,
                          const ProjectionPlotOptions& options = {});
 
-void plotCompleteDrapeResult(const SurfaceMeshData& mesh,
-                             const CompleteDrapeResult& result,
-                             const ProjectionPlotOptions& options = {});
-
 void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
-                               const CompleteDrapeResult& completeResult,
-                               const FastDrapeResult& fastResult,
+                               const DrapeResult& completeResult,
+                               const DrapeResult& fastResult,
                                const ProjectionPlotOptions& options = {});
 
 } // namespace geodesic_draping

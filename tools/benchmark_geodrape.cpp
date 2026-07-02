@@ -231,28 +231,21 @@ PrefactoredBenchmarkResult benchmarkPrefactored(const geodesic_draping::SurfaceM
                                                 int warmupRuns,
                                                 int measuredRuns) {
   geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions());
+  geodesic_draping::DrapeSolveOptions solveOptions;
+  solveOptions.mode = fast ? geodesic_draping::DrapeSolveMode::Fast
+                           : geodesic_draping::DrapeSolveMode::Complete;
 
   for (int i = 0; i < warmupRuns; ++i) {
-    if (fast) {
-      const auto result = solver.solveFast(seedXY, angleDegrees);
-      (void)result;
-    } else {
-      const auto result = solver.solveComplete(seedXY, angleDegrees);
-      (void)result;
-    }
+    const auto result = solver.solve(seedXY, angleDegrees, solveOptions);
+    (void)result;
   }
 
   std::vector<double> solveSeconds;
   solveSeconds.reserve(static_cast<size_t>(measuredRuns));
   for (int i = 0; i < measuredRuns; ++i) {
     const auto start = Clock::now();
-    if (fast) {
-      const auto result = solver.solveFast(seedXY, angleDegrees);
-      (void)result;
-    } else {
-      const auto result = solver.solveComplete(seedXY, angleDegrees);
-      (void)result;
-    }
+    const auto result = solver.solve(seedXY, angleDegrees, solveOptions);
+    (void)result;
     solveSeconds.push_back(secondsSince(start));
   }
 

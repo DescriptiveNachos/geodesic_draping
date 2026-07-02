@@ -224,41 +224,18 @@ void plotGeneratorTraces(const std::array<GeneratorTrace, 4>& traces,
 #endif
 }
 
-void plotCompleteDrapeResult(const SurfaceMeshData& mesh,
-                             const CompleteDrapeResult& result,
-                             const ProjectionPlotOptions& options) {
-#if GEODESIC_DRAPING_HAS_POLYSCOPE
-  ensurePolyscopeReady(options.clearExisting);
-
-  polyscope::SurfaceMesh* psMesh =
-      polyscope::registerSurfaceMesh(options.name + " mesh", toPolyscopePoints(mesh), toPolyscopeFaces(mesh));
-
-  psMesh->addVertexSignedDistanceQuantity("dist_0", result.distances[0]);
-  psMesh->addVertexSignedDistanceQuantity("dist_1", result.distances[1]);
-  psMesh->addVertexVectorQuantity("grad_0", toPolyscopePoints(result.gradients[0]), polyscope::VectorType::AMBIENT);
-  psMesh->addVertexVectorQuantity("grad_1", toPolyscopePoints(result.gradients[1]), polyscope::VectorType::AMBIENT);
-  psMesh->addVertexScalarQuantity("shear_degrees", result.shearAnglesDegrees)->setEnabled(true);
-
-  registerSeedDirectionsAndGenerators(
-      options.name, result.seed, result.directions, result.generators, options.directionLength);
-
-  if (options.show) {
-    polyscope::show();
-  }
-#else
-  (void)mesh;
-  (void)result;
-  (void)options;
-  throw std::runtime_error(
-      "Polyscope plotting is disabled. Reconfigure with GEODESIC_DRAPING_ENABLE_POLYSCOPE=ON.");
-#endif
-}
-
 void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
-                               const CompleteDrapeResult& completeResult,
-                               const FastDrapeResult& fastResult,
+                               const DrapeResult& completeResult,
+                               const DrapeResult& fastResult,
                                const ProjectionPlotOptions& options) {
 #if GEODESIC_DRAPING_HAS_POLYSCOPE
+  if (!completeResult.distances || !completeResult.gradients || !completeResult.vertexShearAnglesDegrees) {
+    throw std::runtime_error("plotDrapeComparisonResult requires a complete-mode result");
+  }
+  if (!fastResult.faceShearAnglesDegrees || !fastResult.vertexShearAnglesDegrees) {
+    throw std::runtime_error("plotDrapeComparisonResult requires a fast result with sampled secondary shear");
+  }
+
   ensurePolyscopeReady(options.clearExisting);
 
   polyscope::SurfaceMesh* psMesh =
@@ -266,20 +243,20 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
 
   auto quantities = std::make_shared<DrapeComparisonQuantities>();
   quantities->completeDistance0 = psMesh->addVertexSignedDistanceQuantity(
-      "complete dist_0", completeResult.distances[0]);
+      "complete dist_0", (*completeResult.distances)[0]);
   quantities->completeDistance1 = psMesh->addVertexSignedDistanceQuantity(
-      "complete dist_1", completeResult.distances[1]);
+      "complete dist_1", (*completeResult.distances)[1]);
   quantities->completeGradient0 = psMesh->addVertexVectorQuantity(
-      "complete grad_0", toPolyscopePoints(completeResult.gradients[0]), polyscope::VectorType::AMBIENT);
+      "complete grad_0", toPolyscopePoints((*completeResult.gradients)[0]), polyscope::VectorType::AMBIENT);
   quantities->completeGradient1 = psMesh->addVertexVectorQuantity(
-      "complete grad_1", toPolyscopePoints(completeResult.gradients[1]), polyscope::VectorType::AMBIENT);
-  const auto completeMagnitudeDiagnostics = analyzeCompleteGradientMagnitudes(completeResult);
+      "complete grad_1", toPolyscopePoints((*completeResult.gradients)[1]), polyscope::VectorType::AMBIENT);
+  const auto completeMagnitudeDiagnostics = analyzeGradientMagnitudes(*completeResult.gradients);
   quantities->completeGradient0Deviation = psMesh->addVertexScalarQuantity(
       "abs(|complete grad_0| - 1)", completeMagnitudeDiagnostics[0].absDeviationFromUnit);
   quantities->completeGradient1Deviation = psMesh->addVertexScalarQuantity(
       "abs(|complete grad_1| - 1)", completeMagnitudeDiagnostics[1].absDeviationFromUnit);
   quantities->completeShear = psMesh->addVertexScalarQuantity(
-      "complete shear_degrees", completeResult.shearAnglesDegrees);
+      "complete shear_degrees", *completeResult.vertexShearAnglesDegrees);
   GeometryCentralSurface surface = makeGeometryCentralSurface(mesh);
   const std::vector<Vec3> fastFaceDirections0 = faceDirectionsToExtrinsicVectors(
       surface,
@@ -298,9 +275,9 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
   quantities->fastFaceDirection1Deviation = psMesh->addFaceScalarQuantity(
       "abs(|fast face dir_1| - 1)", fastFaceMagnitudeDiagnostics1.absDeviationFromUnit);
   quantities->fastFaceShear = psMesh->addFaceScalarQuantity(
-      "fast face shear_degrees", fastResult.faceShearAnglesDegrees);
+      "fast face shear_degrees", *fastResult.faceShearAnglesDegrees);
   quantities->fastVertexShear = psMesh->addVertexScalarQuantity(
-      "fast vertex shear_degrees", fastResult.vertexShearAnglesDegrees);
+      "fast vertex shear_degrees", *fastResult.vertexShearAnglesDegrees);
   applyDrapeComparisonDisplay(*quantities);
 
   registerSeedDirectionsAndGenerators(options.name,

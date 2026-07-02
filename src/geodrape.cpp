@@ -59,47 +59,6 @@ DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
   return result;
 }
 
-CompleteDrapeResult GeoDrapeSolver::solveComplete(const Vec2& seedXY, double angleDegrees) {
-  const auto unified = solve(seedXY, angleDegrees, {DrapeSolveMode::Complete});
-
-  CompleteDrapeResult result;
-  result.seed = unified.seed;
-  result.directions = unified.directions;
-  result.generators = unified.generators;
-  result.sourceCurves = unified.sourceCurves;
-  result.distances = *unified.distances;
-  result.gradients = *unified.gradients;
-  result.shearAnglesDegrees = *unified.vertexShearAnglesDegrees;
-
-  return result;
-}
-
-FastDrapeResult GeoDrapeSolver::solveFast(const Vec2& seedXY,
-                                          double angleDegrees,
-                                          const DrapeSolveOptions& solveOptions) {
-  DrapeSolveOptions legacyOptions = solveOptions;
-  legacyOptions.sampleSecondaryShear = true;
-  const auto unified = solve(seedXY, angleDegrees, legacyOptions);
-
-  FastDrapeResult result;
-  result.seed = unified.seed;
-  result.directions = unified.directions;
-  result.generators = unified.generators;
-  result.sourceCurves = unified.sourceCurves;
-  result.customHeatSolves = unified.customHeatSolves;
-  result.faceDirections = unified.faceDirections;
-  if (unified.distances) {
-    result.distances = *unified.distances;
-  }
-  if (unified.faceShearAnglesDegrees) {
-    result.faceShearAnglesDegrees = *unified.faceShearAnglesDegrees;
-  }
-  if (unified.vertexShearAnglesDegrees) {
-    result.vertexShearAnglesDegrees = *unified.vertexShearAnglesDegrees;
-  }
-  return result;
-}
-
 DrapeResult solveDrape(const SurfaceMeshData& mesh,
                        const Vec2& seedXY,
                        double angleDegrees,
@@ -107,23 +66,6 @@ DrapeResult solveDrape(const SurfaceMeshData& mesh,
                        const DrapeSolveOptions& solveOptions) {
   GeoDrapeSolver solver(mesh, heatOptions);
   return solver.solve(seedXY, angleDegrees, solveOptions);
-}
-
-CompleteDrapeResult solveCompleteDrape(const SurfaceMeshData& mesh,
-                                       const Vec2& seedXY,
-                                       double angleDegrees,
-                                       const SignedHeatSolveOptions& heatOptions) {
-  GeoDrapeSolver solver(mesh, heatOptions);
-  return solver.solveComplete(seedXY, angleDegrees);
-}
-
-FastDrapeResult solveFastDrape(const SurfaceMeshData& mesh,
-                               const Vec2& seedXY,
-                               double angleDegrees,
-                               const SignedHeatSolveOptions& heatOptions,
-                               const DrapeSolveOptions& solveOptions) {
-  GeoDrapeSolver solver(mesh, heatOptions);
-  return solver.solveFast(seedXY, angleDegrees, solveOptions);
 }
 
 } // namespace geodesic_draping
