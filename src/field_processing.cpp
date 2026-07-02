@@ -1,10 +1,29 @@
 #include "geodesic_draping/field_processing.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace geodesic_draping {
+namespace {
+
+double triangleArea(const Vec3& p0, const Vec3& p1, const Vec3& p2) {
+  return 0.5 * (p1 - p0).cross(p2 - p0).norm();
+}
+
+double cornerAngle(const Vec3& center, const Vec3& pA, const Vec3& pB) {
+  const Vec3 u = pA - center;
+  const Vec3 v = pB - center;
+  const double denom = u.norm() * v.norm();
+  if (denom == 0.0) {
+    return 0.0;
+  }
+  return std::acos(std::clamp(u.dot(v) / denom, -1.0, 1.0));
+}
+
+} // namespace
 
 std::vector<Vec3> computeVertexScalarGradients(const SurfaceMeshData& mesh,
                                                const std::vector<double>& scalarField) {
@@ -62,10 +81,56 @@ std::vector<double> computeShearAnglesDegrees(const std::vector<Vec3>& gradients
   for (size_t i = 0; i < gradients0.size(); ++i) {
     const double norm0 = gradients0[i].norm();
     const double norm1 = gradients1[i].norm();
-    const double cosTheta = std::clamp(gradients1[i].dot(gradients0[i]) / (norm0 * norm1), -1.0, 1.0);
-    shear.push_back(std::abs((std::acos(cosTheta) * 180.0 / pi) - 90.0));
+    if (norm0 == 0.0 || norm1 == 0.0) {
+      shear.push_back(std::numeric_limits<double>::quiet_NaN());
+      continue;
+    }
+    const double dotProduct = gradients0[i].dot(gradients1[i]);
+    const double determinantMagnitude = gradients0[i].cross(gradients1[i]).norm();
+    const double theta = std::atan2(determinantMagnitude, dotProduct);
+    shear.push_back(std::abs((theta * 180.0 / pi) - 90.0));
   }
   return shear;
+}
+
+std::vector<double> averageFaceScalarsToVertices(const SurfaceMeshData& mesh,
+                                                 const std::vector<double>& faceScalars,
+                                                 FaceScalarAveraging averaging) {
+  if (mesh.faces.size() != faceScalars.size()) {
+    throw std::runtime_error("averageFaceScalarsToVertices requires one scalar per face");
+  }
+
+  std::vector<double> accumulated(mesh.vertices.size(), 0.0);
+  std::vector<double> totalWeights(mesh.vertices.size(), 0.0);
+  for (size_t faceIndex = 0; faceIndex < mesh.faces.size(); ++faceIndex) {
+    const Face& face = mesh.faces[faceIndex];
+    const Vec3& p0 = mesh.vertices[face[0]];
+    const Vec3& p1 = mesh.vertices[face[1]];
+    const Vec3& p2 = mesh.vertices[face[2]];
+    const double area = triangleArea(p0, p1, p2);
+    if (area == 0.0) {
+      continue;
+    }
+
+    const std::array<double, 3> cornerWeights{
+        averaging == FaceScalarAveraging::CornerAngle ? cornerAngle(p0, p1, p2) : area,
+        averaging == FaceScalarAveraging::CornerAngle ? cornerAngle(p1, p2, p0) : area,
+        averaging == FaceScalarAveraging::CornerAngle ? cornerAngle(p2, p0, p1) : area,
+    };
+    for (size_t localIndex = 0; localIndex < 3; ++localIndex) {
+      const size_t vertexIndex = face[localIndex];
+      const double weight = cornerWeights[localIndex];
+      accumulated[vertexIndex] += weight * faceScalars[faceIndex];
+      totalWeights[vertexIndex] += weight;
+    }
+  }
+
+  for (size_t i = 0; i < accumulated.size(); ++i) {
+    if (totalWeights[i] > 0.0) {
+      accumulated[i] /= totalWeights[i];
+    }
+  }
+  return accumulated;
 }
 
 } // namespace geodesic_draping

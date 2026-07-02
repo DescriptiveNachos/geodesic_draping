@@ -1,5 +1,6 @@
 #include "fixture_io.h"
 #include "geodesic_draping/diagnostics.h"
+#include "geodesic_draping/field_processing.h"
 #include "geodesic_draping/geodrape.h"
 #include "geodesic_draping/plotting.h"
 
@@ -90,6 +91,14 @@ void printMagnitudeDiagnostics(const std::string& label,
             << "  mean_abs_unit_dev " << s.meanAbsDeviationFromUnit
             << "  near_zero " << s.nearZeroCount
             << "  nonfinite " << s.nonFiniteCount << "\n";
+}
+
+void printShearSummary(const std::string& label, const std::vector<double>& shear) {
+  const ScalarStats s = stats(shear);
+  std::cout << std::left << std::setw(18) << label
+            << " shear min " << s.min
+            << "  max " << s.max
+            << "  mean " << s.mean << "\n";
 }
 
 void printVectorComparison(const std::string& label, const Vec3& actual, const Vec3& golden) {
@@ -230,25 +239,21 @@ int main(int argc, char** argv) {
                           result.shearAnglesDegrees,
                           geodesic_draping::fixture_io::loadGoldenShearArray(fixtureDir, "complete"));
     std::cout << "\n";
-    printStats("fast_shear", fastResult.shearAnglesDegrees);
-    printVectorArrayComparison("fast grad_0",
-                               fastResult.gradients[0],
-                               geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_0"));
-    printVectorArrayComparison("fast grad_1",
-                               fastResult.gradients[1],
-                               geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_1"));
-    printScalarComparison("fast shear",
-                          fastResult.shearAnglesDegrees,
-                          geodesic_draping::fixture_io::loadGoldenShearArray(fixtureDir, "fast"));
+    printStats("fast_face_shear", fastResult.faceShearAnglesDegrees);
+    printStats("fast_vertex_shear", fastResult.vertexShearAnglesDegrees);
     std::cout << "\n";
     const auto completeMagnitudeDiagnostics =
         geodesic_draping::analyzeCompleteGradientMagnitudes(result);
-    const auto fastMagnitudeDiagnostics =
-        geodesic_draping::analyzeFastGradientMagnitudes(fastResult);
     printMagnitudeDiagnostics("complete grad_0", completeMagnitudeDiagnostics[0]);
     printMagnitudeDiagnostics("complete grad_1", completeMagnitudeDiagnostics[1]);
-    printMagnitudeDiagnostics("fast grad_0", fastMagnitudeDiagnostics[0]);
-    printMagnitudeDiagnostics("fast grad_1", fastMagnitudeDiagnostics[1]);
+
+    auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
+    const auto faceDirections0 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fastResult.faceDirections[0]);
+    const auto faceDirections1 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fastResult.faceDirections[1]);
+    printMagnitudeDiagnostics("fast face dir_0", geodesic_draping::analyzeVectorMagnitudes(faceDirections0));
+    printMagnitudeDiagnostics("fast face dir_1", geodesic_draping::analyzeVectorMagnitudes(faceDirections1));
+    printShearSummary("fast face", fastResult.faceShearAnglesDegrees);
+    printShearSummary("fast vertex", fastResult.vertexShearAnglesDegrees);
 
     ProjectionPlotOptions options;
     options.name = fixtureName + " drape comparison";

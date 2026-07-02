@@ -33,8 +33,4 @@ std::array<VectorMagnitudeDiagnostics, 2> analyzeCompleteGradientMagnitudes(
     const CompleteDrapeResult& result,
     double nearZeroEpsilon = 1e-12);
 
-std::array<VectorMagnitudeDiagnostics, 2> analyzeFastGradientMagnitudes(
-    const FastDrapeResult& result,
-    double nearZeroEpsilon = 1e-12);
-
 } // namespace geodesic_draping

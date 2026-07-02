@@ -26,8 +26,9 @@ struct FastDrapeResult {
   std::array<GeneratorTrace, 4> generators;
   SourceCurves sourceCurves;
   std::array<CustomSignedHeatResult, 2> customHeatSolves;
-  std::array<std::vector<Vec3>, 2> gradients;
-  std::vector<double> shearAnglesDegrees;
+  std::array<FaceHeatDirectionField, 2> faceDirections;
+  std::vector<double> faceShearAnglesDegrees;
+  std::vector<double> vertexShearAnglesDegrees;
 };
 
 class GeoDrapeSolver {

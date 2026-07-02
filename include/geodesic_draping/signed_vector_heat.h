@@ -12,6 +12,11 @@ namespace geodesic_draping {
 using EdgeHeatField = std::vector<std::complex<double>>;
 using FaceHeatDirectionField = std::vector<Vec3>;
 
+enum class VertexDirectionAveraging {
+  FaceArea,
+  CornerAngle,
+};
+
 struct DiffusedHeatFieldResult {
   std::vector<std::vector<SurfaceReference>> preprocessedSourceCurves;
   EdgeHeatField sourceEdgeHeatField;
@@ -21,7 +26,6 @@ struct DiffusedHeatFieldResult {
 struct CustomSignedHeatResult {
   DiffusedHeatFieldResult diffusion;
   FaceHeatDirectionField normalizedFaceDirections;
-  std::vector<Vec3> vertexDirections;
 };
 
 class CustomSignedHeatSolver {
@@ -75,9 +79,14 @@ private:
 FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& surface,
                                                         const EdgeHeatField& diffusedEdgeHeatField);
 
-std::vector<Vec3> averageFaceDirectionsToVerticesReference(
+std::vector<Vec3> faceDirectionsToExtrinsicVectors(
     GeometryCentralSurface& surface,
     const FaceHeatDirectionField& normalizedFaceDirections);
+
+std::vector<double> computeFaceShearAnglesDegrees(
+    GeometryCentralSurface& surface,
+    const FaceHeatDirectionField& normalizedFaceDirections0,
+    const FaceHeatDirectionField& normalizedFaceDirections1);
 
 CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
                                                          const std::vector<SurfaceReference>& sourceCurve,

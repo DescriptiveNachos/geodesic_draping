@@ -35,6 +35,22 @@ void requireNearVectorArray(const std::vector<geodesic_draping::Vec3>& actual,
   }
 }
 
+void requireNearArray(const std::vector<double>& actual,
+                      const std::vector<double>& expected,
+                      double tolerance,
+                      const std::string& label) {
+  if (actual.size() != expected.size()) {
+    throw std::runtime_error(label + " size mismatch");
+  }
+  double maxDiff = 0.0;
+  for (size_t i = 0; i < actual.size(); ++i) {
+    maxDiff = std::max(maxDiff, std::abs(actual[i] - expected[i]));
+  }
+  if (maxDiff > tolerance) {
+    throw std::runtime_error(label + " exceeded tolerance");
+  }
+}
+
 void testFixture(const std::filesystem::path& root,
                  const std::string& name,
                  double tolerance) {
@@ -54,36 +70,44 @@ void testFixture(const std::filesystem::path& root,
   const auto options = fixtureHeatOptions();
   const auto heat = geodesic_draping::computeCustomSignedHeatDirections(surface, sourceCurves, options);
 
-  requireNearVectorArray(heat[0].vertexDirections,
-                         geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_0"),
-                         tolerance,
-                         name + " fast grad_0");
-  requireNearVectorArray(heat[1].vertexDirections,
-                         geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_1"),
-                         tolerance,
-                         name + " fast grad_1");
-
   if (heat[0].diffusion.sourceEdgeHeatField.size() != surface.mesh->nEdges() ||
       heat[0].diffusion.diffusedEdgeHeatField.size() != surface.mesh->nEdges() ||
       heat[0].normalizedFaceDirections.size() != surface.mesh->nFaces()) {
     throw std::runtime_error(name + " fast heat intermediate sizes do not match mesh");
   }
+  const auto faceShear = geodesic_draping::computeFaceShearAnglesDegrees(
+      surface,
+      heat[0].normalizedFaceDirections,
+      heat[1].normalizedFaceDirections);
+  if (faceShear.size() != surface.mesh->nFaces()) {
+    throw std::runtime_error(name + " face shear size does not match mesh");
+  }
+  for (double value : faceShear) {
+    if (!std::isfinite(value)) {
+      throw std::runtime_error(name + " face shear contains non-finite values");
+    }
+  }
+
+  const auto vertexShear = geodesic_draping::averageFaceScalarsToVertices(mesh, faceShear);
+  if (vertexShear.size() != mesh.vertices.size()) {
+    throw std::runtime_error(name + " sampled vertex shear does not match mesh");
+  }
 
   const auto fast = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options);
-  requireNearVectorArray(fast.gradients[0],
-                         geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_0"),
-                         tolerance,
-                         name + " high-level fast grad_0");
-  requireNearVectorArray(fast.gradients[1],
-                         geodesic_draping::fixture_io::loadGoldenVectorArray(fixtureDir, "fast", "grad_1"),
-                         tolerance,
-                         name + " high-level fast grad_1");
+  if (fast.faceDirections[0].size() != surface.mesh->nFaces() ||
+      fast.faceDirections[1].size() != surface.mesh->nFaces() ||
+      fast.faceShearAnglesDegrees.size() != surface.mesh->nFaces() ||
+      fast.vertexShearAnglesDegrees.size() != mesh.vertices.size()) {
+    throw std::runtime_error(name + " high-level fast output sizes do not match mesh");
+  }
+  requireNearArray(fast.faceShearAnglesDegrees, faceShear, tolerance, name + " high-level face shear");
+  requireNearArray(fast.vertexShearAnglesDegrees, vertexShear, tolerance, name + " high-level vertex shear");
 
   geodesic_draping::GeoDrapeSolver solver(mesh, options);
   const auto first = solver.solveFast(seedXY, angleDegrees);
   const auto second = solver.solveFast(seedXY, angleDegrees);
-  requireNearVectorArray(second.gradients[0], first.gradients[0], 1e-12, name + " persistent fast grad_0");
-  requireNearVectorArray(second.gradients[1], first.gradients[1], 1e-12, name + " persistent fast grad_1");
+  requireNearArray(second.faceShearAnglesDegrees, first.faceShearAnglesDegrees, 1e-12, name + " persistent fast face shear");
+  requireNearArray(second.vertexShearAnglesDegrees, first.vertexShearAnglesDegrees, 1e-12, name + " persistent fast vertex shear");
 }
 
 void testFastFinite(const std::filesystem::path& root, const std::string& name) {
@@ -93,22 +117,67 @@ void testFastFinite(const std::filesystem::path& root, const std::string& name) 
   const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
   const auto fast = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions());
 
-  if (fast.gradients[0].size() != mesh.vertices.size() ||
-      fast.gradients[1].size() != mesh.vertices.size() ||
-      fast.shearAnglesDegrees.size() != mesh.vertices.size()) {
+  if (fast.faceShearAnglesDegrees.size() != mesh.faces.size() ||
+      fast.vertexShearAnglesDegrees.size() != mesh.vertices.size()) {
     throw std::runtime_error(name + " fast output sizes do not match mesh");
   }
-  for (const auto& field : fast.gradients) {
+  for (const auto& field : fast.faceDirections) {
+    if (field.size() != mesh.faces.size()) {
+      throw std::runtime_error(name + " fast face direction sizes do not match mesh");
+    }
     for (const auto& value : field) {
       if (!std::isfinite(value.x()) || !std::isfinite(value.y()) || !std::isfinite(value.z())) {
-        throw std::runtime_error(name + " fast vector field contains non-finite values");
+        throw std::runtime_error(name + " fast face direction field contains non-finite values");
       }
     }
   }
-  for (double value : fast.shearAnglesDegrees) {
+  for (double value : fast.faceShearAnglesDegrees) {
     if (!std::isfinite(value)) {
-      throw std::runtime_error(name + " fast shear contains non-finite values");
+      throw std::runtime_error(name + " fast face shear contains non-finite values");
     }
+  }
+  for (double value : fast.vertexShearAnglesDegrees) {
+    if (!std::isfinite(value)) {
+      throw std::runtime_error(name + " fast vertex shear contains non-finite values");
+    }
+  }
+}
+
+void testAnalyticFaceShear() {
+  geodesic_draping::SurfaceMeshData mesh;
+  mesh.vertices = {
+      {0.0, 0.0, 0.0},
+      {1.0, 0.0, 0.0},
+      {0.0, 1.0, 0.0},
+  };
+  mesh.faces = {{{0, 1, 2}}};
+  auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
+
+  const geodesic_draping::FaceHeatDirectionField xDirection{{-1.0, 1.0, 0.0}};
+  const geodesic_draping::FaceHeatDirectionField yDirection{{-1.0, 0.0, 1.0}};
+
+  const auto orthogonalShear =
+      geodesic_draping::computeFaceShearAnglesDegrees(surface, xDirection, yDirection);
+  if (orthogonalShear.size() != 1 || std::abs(orthogonalShear[0]) > 1e-12) {
+    throw std::runtime_error("orthogonal analytic face shear should be zero");
+  }
+
+  const auto parallelShear =
+      geodesic_draping::computeFaceShearAnglesDegrees(surface, xDirection, xDirection);
+  if (parallelShear.size() != 1 || std::abs(parallelShear[0] - 90.0) > 1e-12) {
+    throw std::runtime_error("parallel analytic face shear should be ninety degrees");
+  }
+
+  const geodesic_draping::FaceHeatDirectionField negativeXDirection{{1.0, -1.0, 0.0}};
+  const auto oppositeShear =
+      geodesic_draping::computeFaceShearAnglesDegrees(surface, xDirection, negativeXDirection);
+  if (oppositeShear.size() != 1 || std::abs(oppositeShear[0] - 90.0) > 1e-12) {
+    throw std::runtime_error("opposite analytic face shear should be ninety degrees");
+  }
+
+  const auto extrinsic = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, xDirection);
+  if (extrinsic.size() != 1 || (extrinsic[0] - geodesic_draping::Vec3{1.0, 0.0, 0.0}).norm() > 1e-12) {
+    throw std::runtime_error("analytic face direction should convert to the expected extrinsic vector");
   }
 }
 
@@ -116,6 +185,7 @@ void testFastFinite(const std::filesystem::path& root, const std::string& name) 
 
 int main() {
   const std::filesystem::path fixtureRoot = GEODESIC_DRAPING_TEST_DATA_DIR;
+  testAnalyticFaceShear();
   testFixture(fixtureRoot, "tiny_planar", 1e-12);
   testFixture(fixtureRoot, "small_curved", 2e-2);
   testFixture(fixtureRoot, "demo_part", 1e-10);

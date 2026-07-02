@@ -1,6 +1,8 @@
 #include "geodesic_draping/plotting.h"
 
 #include "geodesic_draping/diagnostics.h"
+#include "geodesic_draping/field_processing.h"
+#include "geodesic_draping/geometrycentral_adapter.h"
 
 #include <stdexcept>
 
@@ -76,14 +78,17 @@ struct DrapeComparisonQuantities {
   polyscope::Quantity* completeGradient0Deviation = nullptr;
   polyscope::Quantity* completeGradient1Deviation = nullptr;
   polyscope::Quantity* completeShear = nullptr;
-  polyscope::Quantity* fastGradient0 = nullptr;
-  polyscope::Quantity* fastGradient1 = nullptr;
-  polyscope::Quantity* fastGradient0Deviation = nullptr;
-  polyscope::Quantity* fastGradient1Deviation = nullptr;
-  polyscope::Quantity* fastShear = nullptr;
+  polyscope::Quantity* fastFaceDirection0 = nullptr;
+  polyscope::Quantity* fastFaceDirection1 = nullptr;
+  polyscope::Quantity* fastFaceDirection0Deviation = nullptr;
+  polyscope::Quantity* fastFaceDirection1Deviation = nullptr;
+  polyscope::Quantity* fastFaceShear = nullptr;
+  polyscope::Quantity* fastVertexShear = nullptr;
   bool showFast = false;
   bool showVectors = false;
+  bool showFaceVectors = false;
   int completeScalar = 0;
+  int fastScalar = 0;
 };
 
 void setEnabled(polyscope::Quantity* quantity, bool enabled) {
@@ -100,18 +105,20 @@ void applyDrapeComparisonDisplay(DrapeComparisonQuantities& quantities) {
   setEnabled(quantities.completeGradient0Deviation, false);
   setEnabled(quantities.completeGradient1Deviation, false);
   setEnabled(quantities.completeShear, false);
-  setEnabled(quantities.fastGradient0, false);
-  setEnabled(quantities.fastGradient1, false);
-  setEnabled(quantities.fastGradient0Deviation, false);
-  setEnabled(quantities.fastGradient1Deviation, false);
-  setEnabled(quantities.fastShear, false);
+  setEnabled(quantities.fastFaceDirection0, false);
+  setEnabled(quantities.fastFaceDirection1, false);
+  setEnabled(quantities.fastFaceDirection0Deviation, false);
+  setEnabled(quantities.fastFaceDirection1Deviation, false);
+  setEnabled(quantities.fastFaceShear, false);
+  setEnabled(quantities.fastVertexShear, false);
 
   if (quantities.showFast) {
-    setEnabled(quantities.fastShear, true);
-    setEnabled(quantities.fastGradient0, quantities.showVectors);
-    setEnabled(quantities.fastGradient1, quantities.showVectors);
-    setEnabled(quantities.fastGradient0Deviation, true);
-    setEnabled(quantities.fastGradient1Deviation, true);
+    setEnabled(quantities.fastFaceShear, quantities.fastScalar == 0);
+    setEnabled(quantities.fastVertexShear, quantities.fastScalar == 1);
+    setEnabled(quantities.fastFaceDirection0, quantities.showFaceVectors);
+    setEnabled(quantities.fastFaceDirection1, quantities.showFaceVectors);
+    setEnabled(quantities.fastFaceDirection0Deviation, true);
+    setEnabled(quantities.fastFaceDirection1Deviation, true);
   } else {
     setEnabled(quantities.completeShear, quantities.completeScalar == 0);
     setEnabled(quantities.completeDistance0, quantities.completeScalar == 1);
@@ -273,17 +280,27 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
       "abs(|complete grad_1| - 1)", completeMagnitudeDiagnostics[1].absDeviationFromUnit);
   quantities->completeShear = psMesh->addVertexScalarQuantity(
       "complete shear_degrees", completeResult.shearAnglesDegrees);
-  quantities->fastGradient0 = psMesh->addVertexVectorQuantity(
-      "fast grad_0", toPolyscopePoints(fastResult.gradients[0]), polyscope::VectorType::AMBIENT);
-  quantities->fastGradient1 = psMesh->addVertexVectorQuantity(
-      "fast grad_1", toPolyscopePoints(fastResult.gradients[1]), polyscope::VectorType::AMBIENT);
-  const auto fastMagnitudeDiagnostics = analyzeFastGradientMagnitudes(fastResult);
-  quantities->fastGradient0Deviation = psMesh->addVertexScalarQuantity(
-      "abs(|fast grad_0| - 1)", fastMagnitudeDiagnostics[0].absDeviationFromUnit);
-  quantities->fastGradient1Deviation = psMesh->addVertexScalarQuantity(
-      "abs(|fast grad_1| - 1)", fastMagnitudeDiagnostics[1].absDeviationFromUnit);
-  quantities->fastShear = psMesh->addVertexScalarQuantity(
-      "fast shear_degrees", fastResult.shearAnglesDegrees);
+  GeometryCentralSurface surface = makeGeometryCentralSurface(mesh);
+  const std::vector<Vec3> fastFaceDirections0 = faceDirectionsToExtrinsicVectors(
+      surface,
+      fastResult.faceDirections[0]);
+  const std::vector<Vec3> fastFaceDirections1 = faceDirectionsToExtrinsicVectors(
+      surface,
+      fastResult.faceDirections[1]);
+  const auto fastFaceMagnitudeDiagnostics0 = analyzeVectorMagnitudes(fastFaceDirections0);
+  const auto fastFaceMagnitudeDiagnostics1 = analyzeVectorMagnitudes(fastFaceDirections1);
+  quantities->fastFaceDirection0 = psMesh->addFaceVectorQuantity(
+      "fast face dir_0", toPolyscopePoints(fastFaceDirections0), polyscope::VectorType::AMBIENT);
+  quantities->fastFaceDirection1 = psMesh->addFaceVectorQuantity(
+      "fast face dir_1", toPolyscopePoints(fastFaceDirections1), polyscope::VectorType::AMBIENT);
+  quantities->fastFaceDirection0Deviation = psMesh->addFaceScalarQuantity(
+      "abs(|fast face dir_0| - 1)", fastFaceMagnitudeDiagnostics0.absDeviationFromUnit);
+  quantities->fastFaceDirection1Deviation = psMesh->addFaceScalarQuantity(
+      "abs(|fast face dir_1| - 1)", fastFaceMagnitudeDiagnostics1.absDeviationFromUnit);
+  quantities->fastFaceShear = psMesh->addFaceScalarQuantity(
+      "fast face shear_degrees", fastResult.faceShearAnglesDegrees);
+  quantities->fastVertexShear = psMesh->addVertexScalarQuantity(
+      "fast vertex shear_degrees", fastResult.vertexShearAnglesDegrees);
   applyDrapeComparisonDisplay(*quantities);
 
   registerSeedDirectionsAndGenerators(options.name,
@@ -296,6 +313,9 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
     bool changed = false;
     changed |= ImGui::Checkbox("Show fast result", &quantities->showFast);
     changed |= ImGui::Checkbox("Show vector fields", &quantities->showVectors);
+    if (quantities->showFast) {
+      changed |= ImGui::Checkbox("Show face vectors", &quantities->showFaceVectors);
+    }
 
     if (!quantities->showFast) {
       ImGui::TextUnformatted("Complete scalar field");
@@ -303,7 +323,9 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
       changed |= ImGui::RadioButton("dist_0", &quantities->completeScalar, 1);
       changed |= ImGui::RadioButton("dist_1", &quantities->completeScalar, 2);
     } else {
-      ImGui::TextUnformatted("Fast mode displays fast shear");
+      ImGui::TextUnformatted("Fast scalar field");
+      changed |= ImGui::RadioButton("face shear", &quantities->fastScalar, 0);
+      changed |= ImGui::RadioButton("vertex shear", &quantities->fastScalar, 1);
     }
 
     if (changed) {

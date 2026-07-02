@@ -3,6 +3,9 @@
 #include "geometrycentral/numerical/linear_algebra_utilities.h"
 #include "geometrycentral/surface/barycentric_vector.h"
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace geodesic_draping {
@@ -42,6 +45,19 @@ Vec3 fromGcVector3(const gc::Vector3& value) {
 
 Eigen::Index eigenIndex(size_t value) {
   return static_cast<Eigen::Index>(value);
+}
+
+gc::Vector3 faceVectorToExtrinsic(const gcs::Face& face,
+                                  const Vec3& coords,
+                                  gcs::VertexPositionGeometry& geometry) {
+  gc::Vector3 vector{0.0, 0.0, 0.0};
+  size_t localIndex = 0;
+  for (gcs::Vertex vertex : face.adjacentVertices()) {
+    const double coefficient = localIndex == 0 ? coords.x() : (localIndex == 1 ? coords.y() : coords.z());
+    vector += coefficient * geometry.vertexPositions[vertex];
+    ++localIndex;
+  }
+  return vector;
 }
 
 gcs::SurfaceMesh& requireMesh(GeometryCentralSurface& surface) {
@@ -487,36 +503,57 @@ FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& 
   return normalized;
 }
 
-std::vector<Vec3> averageFaceDirectionsToVerticesReference(
+std::vector<Vec3> faceDirectionsToExtrinsicVectors(
     GeometryCentralSurface& surface,
     const FaceHeatDirectionField& normalizedFaceDirections) {
   auto& mesh = *surface.mesh;
   auto& geometry = *surface.geometry;
   if (normalizedFaceDirections.size() != mesh.nFaces()) {
-    throw std::runtime_error("averageFaceDirectionsToVerticesReference requires one direction per face");
+    throw std::runtime_error("faceDirectionsToExtrinsicVectors requires one direction per face");
   }
 
-  geometry.requireFaceAreas();
   geometry.requireVertexPositions();
-  std::vector<Vec3> vertexVectors(mesh.nVertices(), Vec3::Zero());
-  for (gcs::Vertex vertex : mesh.vertices()) {
-    gc::Vector3 average{0.0, 0.0, 0.0};
-    double totalArea = 0.0;
-    for (gcs::Face face : vertex.adjacentFaces()) {
-      const Vec3& coords = normalizedFaceDirections[face.getIndex()];
-      const gcs::SurfacePoint point(face, gc::Vector3{coords.x(), coords.y(), coords.z()});
-      const double area = geometry.faceAreas[face];
-      average += area * point.interpolate(geometry.vertexPositions);
-      totalArea += area;
-    }
-    if (totalArea > 0.0) {
-      average /= totalArea;
-    }
-    vertexVectors[vertex.getIndex()] = fromGcVector3(average);
+  std::vector<Vec3> extrinsic(mesh.nFaces(), Vec3::Zero());
+  for (gcs::Face face : mesh.faces()) {
+    extrinsic[face.getIndex()] =
+        fromGcVector3(faceVectorToExtrinsic(face, normalizedFaceDirections[face.getIndex()], geometry));
   }
-  geometry.unrequireFaceAreas();
   geometry.unrequireVertexPositions();
-  return vertexVectors;
+  return extrinsic;
+}
+
+std::vector<double> computeFaceShearAnglesDegrees(
+    GeometryCentralSurface& surface,
+    const FaceHeatDirectionField& normalizedFaceDirections0,
+    const FaceHeatDirectionField& normalizedFaceDirections1) {
+  auto& mesh = *surface.mesh;
+  auto& geometry = *surface.geometry;
+  if (normalizedFaceDirections0.size() != mesh.nFaces() ||
+      normalizedFaceDirections1.size() != mesh.nFaces()) {
+    throw std::runtime_error("computeFaceShearAnglesDegrees requires one direction per face");
+  }
+
+  constexpr double pi = 3.141592653589793238462643383279502884;
+  std::vector<double> shear(mesh.nFaces(), 0.0);
+  for (gcs::Face face : mesh.faces()) {
+    const Vec3& coords0 = normalizedFaceDirections0[face.getIndex()];
+    const Vec3& coords1 = normalizedFaceDirections1[face.getIndex()];
+    const gcs::BarycentricVector u(face, gc::Vector3{coords0.x(), coords0.y(), coords0.z()});
+    const gcs::BarycentricVector v(face, gc::Vector3{coords1.x(), coords1.y(), coords1.z()});
+    const double normSquared0 = dot(geometry, u, u);
+    const double normSquared1 = dot(geometry, v, v);
+    if (normSquared0 == 0.0 || normSquared1 == 0.0) {
+      shear[face.getIndex()] = std::numeric_limits<double>::quiet_NaN();
+      continue;
+    }
+
+    const double dotProduct = dot(geometry, u, v);
+    const double determinantMagnitude = std::sqrt(
+        std::max(0.0, normSquared0 * normSquared1 - dotProduct * dotProduct));
+    const double theta = std::atan2(determinantMagnitude, dotProduct);
+    shear[face.getIndex()] = std::abs((theta * 180.0 / pi) - 90.0);
+  }
+  return shear;
 }
 
 CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
@@ -527,8 +564,6 @@ CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface&
   result.diffusion = solver.solveDiffusedEdgeHeatField(sourceCurve, options);
   result.normalizedFaceDirections =
       sampleAndNormalizeFaceDirections(surface, result.diffusion.diffusedEdgeHeatField);
-  result.vertexDirections =
-      averageFaceDirectionsToVerticesReference(surface, result.normalizedFaceDirections);
   return result;
 }
 
@@ -541,8 +576,6 @@ std::array<CustomSignedHeatResult, 2> computeCustomSignedHeatDirections(Geometry
     results[i].diffusion = solver.solveDiffusedEdgeHeatField(sourceCurves.curves[i], options);
     results[i].normalizedFaceDirections =
         sampleAndNormalizeFaceDirections(surface, results[i].diffusion.diffusedEdgeHeatField);
-    results[i].vertexDirections =
-        averageFaceDirectionsToVerticesReference(surface, results[i].normalizedFaceDirections);
   }
   return results;
 }
