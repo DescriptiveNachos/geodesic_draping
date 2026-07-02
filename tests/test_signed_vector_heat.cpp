@@ -68,6 +68,18 @@ void testFixture(const std::filesystem::path& root,
       heat[0].normalizedFaceDirections.size() != surface.mesh->nFaces()) {
     throw std::runtime_error(name + " fast heat intermediate sizes do not match mesh");
   }
+  const auto faceShear = geodesic_draping::computeFaceShearAnglesDegrees(
+      surface,
+      heat[0].normalizedFaceDirections,
+      heat[1].normalizedFaceDirections);
+  if (faceShear.size() != surface.mesh->nFaces()) {
+    throw std::runtime_error(name + " face shear size does not match mesh");
+  }
+  for (double value : faceShear) {
+    if (!std::isfinite(value)) {
+      throw std::runtime_error(name + " face shear contains non-finite values");
+    }
+  }
 
   const auto projectedArea = geodesic_draping::averageFaceDirectionsToVerticesProjected(
       surface,
@@ -132,10 +144,42 @@ void testFastFinite(const std::filesystem::path& root, const std::string& name) 
   }
 }
 
+void testAnalyticFaceShear() {
+  geodesic_draping::SurfaceMeshData mesh;
+  mesh.vertices = {
+      {0.0, 0.0, 0.0},
+      {1.0, 0.0, 0.0},
+      {0.0, 1.0, 0.0},
+  };
+  mesh.faces = {{{0, 1, 2}}};
+  auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
+
+  const geodesic_draping::FaceHeatDirectionField xDirection{{-1.0, 1.0, 0.0}};
+  const geodesic_draping::FaceHeatDirectionField yDirection{{-1.0, 0.0, 1.0}};
+
+  const auto orthogonalShear =
+      geodesic_draping::computeFaceShearAnglesDegrees(surface, xDirection, yDirection);
+  if (orthogonalShear.size() != 1 || std::abs(orthogonalShear[0]) > 1e-12) {
+    throw std::runtime_error("orthogonal analytic face shear should be zero");
+  }
+
+  const auto parallelShear =
+      geodesic_draping::computeFaceShearAnglesDegrees(surface, xDirection, xDirection);
+  if (parallelShear.size() != 1 || std::abs(parallelShear[0] - 90.0) > 1e-12) {
+    throw std::runtime_error("parallel analytic face shear should be ninety degrees");
+  }
+
+  const auto extrinsic = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, xDirection);
+  if (extrinsic.size() != 1 || (extrinsic[0] - geodesic_draping::Vec3{1.0, 0.0, 0.0}).norm() > 1e-12) {
+    throw std::runtime_error("analytic face direction should convert to the expected extrinsic vector");
+  }
+}
+
 } // namespace
 
 int main() {
   const std::filesystem::path fixtureRoot = GEODESIC_DRAPING_TEST_DATA_DIR;
+  testAnalyticFaceShear();
   testFixture(fixtureRoot, "tiny_planar", 1e-12);
   testFixture(fixtureRoot, "small_curved", 2e-2);
   testFixture(fixtureRoot, "demo_part", 1e-10);

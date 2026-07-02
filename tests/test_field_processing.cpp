@@ -5,6 +5,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -76,10 +77,36 @@ void testGradientFixture(const std::filesystem::path& root,
                          name + " grad_0");
 }
 
+void testFaceScalarAveraging() {
+  geodesic_draping::SurfaceMeshData mesh;
+  mesh.vertices = {
+      {0.0, 0.0, 0.0},
+      {1.0, 0.0, 0.0},
+      {1.0, 1.0, 0.0},
+      {0.0, 1.0, 0.0},
+  };
+  mesh.faces = {{{0, 1, 2}}, {{0, 2, 3}}};
+
+  const std::vector<double> averaged = geodesic_draping::averageFaceScalarsToVertices(
+      mesh,
+      {2.0, 4.0},
+      geodesic_draping::FaceScalarAveraging::FaceArea);
+  requireNearArray(averaged, {3.0, 2.0, 3.0, 4.0}, 1e-12, "area face scalar average");
+
+  bool threw = false;
+  try {
+    (void)geodesic_draping::averageFaceScalarsToVertices(mesh, {1.0});
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  assert(threw);
+}
+
 } // namespace
 
 int main() {
   const std::filesystem::path fixtureRoot = GEODESIC_DRAPING_TEST_DATA_DIR;
+  testFaceScalarAveraging();
   testFixture(fixtureRoot, "tiny_planar");
   testFixture(fixtureRoot, "small_curved");
   testFixture(fixtureRoot, "demo_part");

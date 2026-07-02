@@ -1,5 +1,6 @@
 #include "fixture_io.h"
 #include "geodesic_draping/diagnostics.h"
+#include "geodesic_draping/field_processing.h"
 #include "geodesic_draping/geodrape.h"
 #include "geodesic_draping/plotting.h"
 
@@ -285,6 +286,16 @@ int main(int argc, char** argv) {
     printMagnitudeDiagnostics("proj angle grad_0", geodesic_draping::analyzeVectorMagnitudes(projectedAngle0));
     printMagnitudeDiagnostics("proj angle grad_1", geodesic_draping::analyzeVectorMagnitudes(projectedAngle1));
     printShearSummary("proj angle", projectedAngleShear);
+    const auto faceShear = geodesic_draping::computeFaceShearAnglesDegrees(
+        surface,
+        fastResult.customHeatSolves[0].normalizedFaceDirections,
+        fastResult.customHeatSolves[1].normalizedFaceDirections);
+    const auto averagedFaceShear = geodesic_draping::averageFaceScalarsToVertices(
+        mesh,
+        faceShear,
+        geodesic_draping::FaceScalarAveraging::FaceArea);
+    printShearSummary("face", faceShear);
+    printShearSummary("face averaged", averagedFaceShear);
 
     ProjectionPlotOptions options;
     options.name = fixtureName + " drape comparison";

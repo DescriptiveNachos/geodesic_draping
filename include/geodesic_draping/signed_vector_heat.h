@@ -89,6 +89,15 @@ std::vector<Vec3> averageFaceDirectionsToVerticesProjected(
     const FaceHeatDirectionField& normalizedFaceDirections,
     VertexDirectionAveraging averaging = VertexDirectionAveraging::FaceArea);
 
+std::vector<Vec3> faceDirectionsToExtrinsicVectors(
+    GeometryCentralSurface& surface,
+    const FaceHeatDirectionField& normalizedFaceDirections);
+
+std::vector<double> computeFaceShearAnglesDegrees(
+    GeometryCentralSurface& surface,
+    const FaceHeatDirectionField& normalizedFaceDirections0,
+    const FaceHeatDirectionField& normalizedFaceDirections1);
+
 CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
                                                          const std::vector<SurfaceReference>& sourceCurve,
                                                          const SignedHeatSolveOptions& options = {});

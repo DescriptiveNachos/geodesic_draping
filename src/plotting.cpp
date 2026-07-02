@@ -85,8 +85,13 @@ struct DrapeComparisonQuantities {
   polyscope::Quantity* fastShear = nullptr;
   polyscope::Quantity* fastProjectedAreaShear = nullptr;
   polyscope::Quantity* fastProjectedAngleShear = nullptr;
+  polyscope::Quantity* fastFaceDirection0 = nullptr;
+  polyscope::Quantity* fastFaceDirection1 = nullptr;
+  polyscope::Quantity* fastFaceShear = nullptr;
+  polyscope::Quantity* fastFaceShearAveraged = nullptr;
   bool showFast = false;
   bool showVectors = false;
+  bool showFaceVectors = false;
   int completeScalar = 0;
   int fastScalar = 0;
 };
@@ -112,13 +117,21 @@ void applyDrapeComparisonDisplay(DrapeComparisonQuantities& quantities) {
   setEnabled(quantities.fastShear, false);
   setEnabled(quantities.fastProjectedAreaShear, false);
   setEnabled(quantities.fastProjectedAngleShear, false);
+  setEnabled(quantities.fastFaceDirection0, false);
+  setEnabled(quantities.fastFaceDirection1, false);
+  setEnabled(quantities.fastFaceShear, false);
+  setEnabled(quantities.fastFaceShearAveraged, false);
 
   if (quantities.showFast) {
     setEnabled(quantities.fastShear, quantities.fastScalar == 0);
     setEnabled(quantities.fastProjectedAreaShear, quantities.fastScalar == 1);
     setEnabled(quantities.fastProjectedAngleShear, quantities.fastScalar == 2);
+    setEnabled(quantities.fastFaceShear, quantities.fastScalar == 3);
+    setEnabled(quantities.fastFaceShearAveraged, quantities.fastScalar == 4);
     setEnabled(quantities.fastGradient0, quantities.showVectors);
     setEnabled(quantities.fastGradient1, quantities.showVectors);
+    setEnabled(quantities.fastFaceDirection0, quantities.showFaceVectors);
+    setEnabled(quantities.fastFaceDirection1, quantities.showFaceVectors);
     setEnabled(quantities.fastGradient0Deviation, true);
     setEnabled(quantities.fastGradient1Deviation, true);
   } else {
@@ -316,6 +329,28 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
   quantities->fastProjectedAngleShear = psMesh->addVertexScalarQuantity(
       "fast projected corner-angle shear_degrees",
       computeShearAnglesDegrees(projectedAngle0, projectedAngle1));
+  const std::vector<Vec3> fastFaceDirections0 = faceDirectionsToExtrinsicVectors(
+      surface,
+      fastResult.customHeatSolves[0].normalizedFaceDirections);
+  const std::vector<Vec3> fastFaceDirections1 = faceDirectionsToExtrinsicVectors(
+      surface,
+      fastResult.customHeatSolves[1].normalizedFaceDirections);
+  const std::vector<double> fastFaceShear = computeFaceShearAnglesDegrees(
+      surface,
+      fastResult.customHeatSolves[0].normalizedFaceDirections,
+      fastResult.customHeatSolves[1].normalizedFaceDirections);
+  const std::vector<double> fastFaceShearAveraged = averageFaceScalarsToVertices(
+      mesh,
+      fastFaceShear,
+      FaceScalarAveraging::FaceArea);
+  quantities->fastFaceDirection0 = psMesh->addFaceVectorQuantity(
+      "fast face dir_0", toPolyscopePoints(fastFaceDirections0), polyscope::VectorType::AMBIENT);
+  quantities->fastFaceDirection1 = psMesh->addFaceVectorQuantity(
+      "fast face dir_1", toPolyscopePoints(fastFaceDirections1), polyscope::VectorType::AMBIENT);
+  quantities->fastFaceShear = psMesh->addFaceScalarQuantity(
+      "fast face shear_degrees", fastFaceShear);
+  quantities->fastFaceShearAveraged = psMesh->addVertexScalarQuantity(
+      "fast face shear averaged_degrees", fastFaceShearAveraged);
   applyDrapeComparisonDisplay(*quantities);
 
   registerSeedDirectionsAndGenerators(options.name,
@@ -328,6 +363,9 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
     bool changed = false;
     changed |= ImGui::Checkbox("Show fast result", &quantities->showFast);
     changed |= ImGui::Checkbox("Show vector fields", &quantities->showVectors);
+    if (quantities->showFast) {
+      changed |= ImGui::Checkbox("Show face vectors", &quantities->showFaceVectors);
+    }
 
     if (!quantities->showFast) {
       ImGui::TextUnformatted("Complete scalar field");
@@ -339,6 +377,8 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
       changed |= ImGui::RadioButton("reference shear", &quantities->fastScalar, 0);
       changed |= ImGui::RadioButton("projected area shear", &quantities->fastScalar, 1);
       changed |= ImGui::RadioButton("projected corner-angle shear", &quantities->fastScalar, 2);
+      changed |= ImGui::RadioButton("face shear", &quantities->fastScalar, 3);
+      changed |= ImGui::RadioButton("face shear averaged", &quantities->fastScalar, 4);
     }
 
     if (changed) {

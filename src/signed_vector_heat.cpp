@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace geodesic_draping {
@@ -616,6 +617,56 @@ std::vector<Vec3> averageFaceDirectionsToVerticesProjected(
   geometry.unrequireFaceAreas();
   geometry.unrequireVertexPositions();
   return vertexVectors;
+}
+
+std::vector<Vec3> faceDirectionsToExtrinsicVectors(
+    GeometryCentralSurface& surface,
+    const FaceHeatDirectionField& normalizedFaceDirections) {
+  auto& mesh = *surface.mesh;
+  auto& geometry = *surface.geometry;
+  if (normalizedFaceDirections.size() != mesh.nFaces()) {
+    throw std::runtime_error("faceDirectionsToExtrinsicVectors requires one direction per face");
+  }
+
+  geometry.requireVertexPositions();
+  std::vector<Vec3> extrinsic(mesh.nFaces(), Vec3::Zero());
+  for (gcs::Face face : mesh.faces()) {
+    extrinsic[face.getIndex()] =
+        fromGcVector3(faceVectorToExtrinsic(face, normalizedFaceDirections[face.getIndex()], geometry));
+  }
+  geometry.unrequireVertexPositions();
+  return extrinsic;
+}
+
+std::vector<double> computeFaceShearAnglesDegrees(
+    GeometryCentralSurface& surface,
+    const FaceHeatDirectionField& normalizedFaceDirections0,
+    const FaceHeatDirectionField& normalizedFaceDirections1) {
+  auto& mesh = *surface.mesh;
+  auto& geometry = *surface.geometry;
+  if (normalizedFaceDirections0.size() != mesh.nFaces() ||
+      normalizedFaceDirections1.size() != mesh.nFaces()) {
+    throw std::runtime_error("computeFaceShearAnglesDegrees requires one direction per face");
+  }
+
+  constexpr double pi = 3.141592653589793238462643383279502884;
+  std::vector<double> shear(mesh.nFaces(), 0.0);
+  for (gcs::Face face : mesh.faces()) {
+    const Vec3& coords0 = normalizedFaceDirections0[face.getIndex()];
+    const Vec3& coords1 = normalizedFaceDirections1[face.getIndex()];
+    const gcs::BarycentricVector u(face, gc::Vector3{coords0.x(), coords0.y(), coords0.z()});
+    const gcs::BarycentricVector v(face, gc::Vector3{coords1.x(), coords1.y(), coords1.z()});
+    const double norm0 = u.norm(geometry);
+    const double norm1 = v.norm(geometry);
+    if (norm0 == 0.0 || norm1 == 0.0) {
+      shear[face.getIndex()] = std::numeric_limits<double>::quiet_NaN();
+      continue;
+    }
+
+    const double cosTheta = std::clamp(dot(geometry, u, v) / (norm0 * norm1), -1.0, 1.0);
+    shear[face.getIndex()] = std::abs((std::acos(cosTheta) * 180.0 / pi) - 90.0);
+  }
+  return shear;
 }
 
 CustomSignedHeatResult computeCustomSignedHeatDirections(GeometryCentralSurface& surface,
