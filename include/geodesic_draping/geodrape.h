@@ -27,8 +27,13 @@ struct FastDrapeResult {
   SourceCurves sourceCurves;
   std::array<CustomSignedHeatResult, 2> customHeatSolves;
   std::array<FaceHeatDirectionField, 2> faceDirections;
+  std::array<std::vector<double>, 2> distances;
   std::vector<double> faceShearAnglesDegrees;
   std::vector<double> vertexShearAnglesDegrees;
+};
+
+struct FastDrapeOptions {
+  bool returnDistances = false;
 };
 
 class GeoDrapeSolver {
@@ -37,7 +42,9 @@ public:
                           const SignedHeatSolveOptions& heatOptions = {});
 
   CompleteDrapeResult solveComplete(const Vec2& seedXY, double angleDegrees);
-  FastDrapeResult solveFast(const Vec2& seedXY, double angleDegrees);
+  FastDrapeResult solveFast(const Vec2& seedXY,
+                            double angleDegrees,
+                            const FastDrapeOptions& fastOptions = {});
 
 private:
   SurfaceMeshData meshData_;
@@ -55,6 +62,7 @@ CompleteDrapeResult solveCompleteDrape(const SurfaceMeshData& mesh,
 FastDrapeResult solveFastDrape(const SurfaceMeshData& mesh,
                                const Vec2& seedXY,
                                double angleDegrees,
-                               const SignedHeatSolveOptions& heatOptions = {});
+                               const SignedHeatSolveOptions& heatOptions = {},
+                               const FastDrapeOptions& fastOptions = {});
 
 } // namespace geodesic_draping

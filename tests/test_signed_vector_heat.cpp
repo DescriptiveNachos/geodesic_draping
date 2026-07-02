@@ -69,6 +69,7 @@ void testFixture(const std::filesystem::path& root,
   const auto sourceCurves = geodesic_draping::pairOppositeGeneratorTraces(generators);
   const auto options = fixtureHeatOptions();
   const auto heat = geodesic_draping::computeCustomSignedHeatDirections(surface, sourceCurves, options);
+  const auto referenceDistances = geodesic_draping::computeSignedHeatDistances(surface, sourceCurves, options);
 
   if (heat[0].diffusion.sourceEdgeHeatField.size() != surface.mesh->nEdges() ||
       heat[0].diffusion.diffusedEdgeHeatField.size() != surface.mesh->nEdges() ||
@@ -100,8 +101,17 @@ void testFixture(const std::filesystem::path& root,
       fast.vertexShearAnglesDegrees.size() != mesh.vertices.size()) {
     throw std::runtime_error(name + " high-level fast output sizes do not match mesh");
   }
+  if (!fast.distances[0].empty() || !fast.distances[1].empty()) {
+    throw std::runtime_error(name + " default fast result should not return distances");
+  }
   requireNearArray(fast.faceShearAnglesDegrees, faceShear, tolerance, name + " high-level face shear");
   requireNearArray(fast.vertexShearAnglesDegrees, vertexShear, tolerance, name + " high-level vertex shear");
+
+  geodesic_draping::FastDrapeOptions fastOptions;
+  fastOptions.returnDistances = true;
+  const auto fastWithDistances = geodesic_draping::solveFastDrape(mesh, seedXY, angleDegrees, options, fastOptions);
+  requireNearArray(fastWithDistances.distances[0], referenceDistances[0], 1e-8, name + " custom dist_0");
+  requireNearArray(fastWithDistances.distances[1], referenceDistances[1], 1e-8, name + " custom dist_1");
 
   geodesic_draping::GeoDrapeSolver solver(mesh, options);
   const auto first = solver.solveFast(seedXY, angleDegrees);
