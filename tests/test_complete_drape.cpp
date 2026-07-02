@@ -87,12 +87,21 @@ void testOneShotComplete(const std::filesystem::path& root, const std::string& n
 
   const auto oneShot = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions(), solveOptions);
   const auto complete = geodesic_draping::solveCompleteDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions());
-  requireNearArray(oneShot.distances[0], complete.distances[0], 1e-12, name + " one-shot complete dist_0");
-  requireNearArray(oneShot.distances[1], complete.distances[1], 1e-12, name + " one-shot complete dist_1");
-  requireNearArray(oneShot.vertexShearAnglesDegrees,
+  assert(oneShot.distances);
+  assert(oneShot.gradients);
+  assert(!oneShot.faceShearAnglesDegrees);
+  assert(oneShot.vertexShearAnglesDegrees);
+  requireNearArray((*oneShot.distances)[0], complete.distances[0], 1e-12, name + " one-shot complete dist_0");
+  requireNearArray((*oneShot.distances)[1], complete.distances[1], 1e-12, name + " one-shot complete dist_1");
+  requireNearArray(*oneShot.vertexShearAnglesDegrees,
                    complete.shearAnglesDegrees,
                    1e-12,
                    name + " one-shot complete shear");
+
+  solveOptions.sampleSecondaryShear = true;
+  const auto sampled = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions(), solveOptions);
+  assert(sampled.faceShearAnglesDegrees);
+  assert(sampled.faceShearAnglesDegrees->size() == mesh.faces.size());
 }
 
 } // namespace

@@ -21,4 +21,7 @@ std::vector<double> averageFaceScalarsToVertices(const SurfaceMeshData& mesh,
                                                  const std::vector<double>& faceScalars,
                                                  FaceScalarAveraging averaging = FaceScalarAveraging::FaceArea);
 
+std::vector<double> averageVertexScalarsToFaces(const SurfaceMeshData& mesh,
+                                                const std::vector<double>& vertexScalars);
+
 } // namespace geodesic_draping

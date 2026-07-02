@@ -5,6 +5,7 @@
 #include "geodesic_draping/custom_signed_heat.h"
 
 #include <array>
+#include <optional>
 #include <vector>
 
 namespace geodesic_draping {
@@ -39,19 +40,21 @@ enum class DrapeSolveMode {
 
 struct DrapeSolveOptions {
   DrapeSolveMode mode = DrapeSolveMode::Fast;
+  bool sampleSecondaryShear = false;
 };
 
 struct DrapeResult {
+  DrapeSolveMode mode = DrapeSolveMode::Fast;
   SeedProjection seed;
   std::array<Vec3, 4> directions;
   std::array<GeneratorTrace, 4> generators;
   SourceCurves sourceCurves;
   std::array<CustomSignedHeatResult, 2> customHeatSolves;
   std::array<FaceHeatDirectionField, 2> faceDirections;
-  std::array<std::vector<double>, 2> distances;
-  std::array<std::vector<Vec3>, 2> gradients;
-  std::vector<double> faceShearAnglesDegrees;
-  std::vector<double> vertexShearAnglesDegrees;
+  std::optional<std::array<std::vector<double>, 2>> distances;
+  std::optional<std::array<std::vector<Vec3>, 2>> gradients;
+  std::optional<std::vector<double>> faceShearAnglesDegrees;
+  std::optional<std::vector<double>> vertexShearAnglesDegrees;
 };
 
 class GeoDrapeSolver {
