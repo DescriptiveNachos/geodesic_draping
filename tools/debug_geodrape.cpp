@@ -3,6 +3,7 @@
 #include "geodesic_draping/field_processing.h"
 #include "geodesic_draping/geodrape.h"
 #include "geodesic_draping/plotting.h"
+#include "geodesic_draping/quality.h"
 
 #include <algorithm>
 #include <cmath>
@@ -19,12 +20,14 @@ namespace {
 
 using geodesic_draping::MagnitudeStats;
 using geodesic_draping::ProjectionPlotOptions;
+using geodesic_draping::SolveQualityReport;
 using geodesic_draping::Vec3;
 using geodesic_draping::VectorMagnitudeDiagnostics;
 
 void printUsage(const char* argv0) {
   std::cout << "Usage:\n"
-            << "  " << argv0 << " [fixture-name] [--no-show] [--direction-length value]\n\n"
+            << "  " << argv0
+            << " [fixture-name] [--no-show] [--direction-length value] [--quality-thresholds path]\n\n"
             << "Fixtures are loaded from " << GEODESIC_DRAPING_TEST_DATA_DIR << "\n"
             << "Default fixture: demo_part\n";
 }
@@ -99,6 +102,30 @@ void printShearSummary(const std::string& label, const std::vector<double>& shea
             << "  mean " << s.mean << "\n";
 }
 
+void printQualityReport(const std::string& label, const SolveQualityReport& report) {
+  std::cout << "\n" << label << " quality " << geodesic_draping::toString(report.level) << "\n";
+  std::cout << "  mesh edge_p99/median " << report.mesh.edgeLengthP99ToMedian
+            << "  aspect_p99 " << report.mesh.triangleAspectRatioP99
+            << "  aspect_max " << report.mesh.triangleAspectRatioMax
+            << "  min_area/bbox " << report.mesh.minFaceAreaRelativeToBbox << "\n";
+  std::cout << "  generators nearest_wall " << report.generators.nearestWallDistance
+            << "  farthest_wall " << report.generators.farthestWallDistance
+            << "  plausible_length [" << report.generators.plausibleMinLength
+            << ", " << report.generators.plausibleMaxLength << "]"
+            << "  short " << report.generators.shortGeneratorCount
+            << "  long " << report.generators.longGeneratorCount
+            << "  missed_boundary " << report.generators.missedBoundaryCount << "\n";
+  std::cout << "  primary shear p95 " << report.primaryShear.p95
+            << "  p99 " << report.primaryShear.p99
+            << "  max-p99 " << report.primaryShear.maxMinusP99
+            << "  local_jump_p99 " << report.primaryShear.localJumpP99
+            << "  local_jump_max " << report.primaryShear.localJumpMax
+            << "  nonfinite " << report.primaryShear.nonFiniteCount << "\n";
+  for (const std::string& warning : report.warnings) {
+    std::cout << "  warning: " << warning << "\n";
+  }
+}
+
 void printVectorComparison(const std::string& label, const Vec3& actual, const Vec3& golden) {
   std::cout << std::left << std::setw(18) << label << " actual [" << actual.transpose() << "]"
             << "  golden [" << golden.transpose() << "]"
@@ -143,6 +170,7 @@ int main(int argc, char** argv) {
     std::string fixtureName = "demo_part";
     bool show = true;
     double directionLength = 25.0;
+    geodesic_draping::SolveQualityThresholds qualityThresholds;
 
     for (int i = 1; i < argc; ++i) {
       const std::string arg = argv[i];
@@ -159,6 +187,13 @@ int main(int argc, char** argv) {
           throw std::runtime_error("--direction-length requires a value");
         }
         directionLength = std::stod(argv[++i]);
+        continue;
+      }
+      if (arg == "--quality-thresholds") {
+        if (i + 1 >= argc) {
+          throw std::runtime_error("--quality-thresholds requires a path");
+        }
+        qualityThresholds = geodesic_draping::loadSolveQualityThresholds(argv[++i], qualityThresholds);
         continue;
       }
       fixtureName = arg;
@@ -260,6 +295,8 @@ int main(int argc, char** argv) {
     printMagnitudeDiagnostics("fast face dir_1", geodesic_draping::analyzeVectorMagnitudes(faceDirections1));
     printShearSummary("fast face", *fastResult.faceShearAnglesDegrees);
     printShearSummary("fast vertex", *fastResult.vertexShearAnglesDegrees);
+    printQualityReport("complete", geodesic_draping::analyzeSolveQuality(mesh, result, qualityThresholds));
+    printQualityReport("fast", geodesic_draping::analyzeSolveQuality(mesh, fastResult, qualityThresholds));
 
     ProjectionPlotOptions options;
     options.name = fixtureName + " drape comparison";
