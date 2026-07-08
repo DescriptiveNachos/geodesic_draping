@@ -214,9 +214,16 @@ int main(int argc, char** argv) {
     fastOptions.sampleVertexShear = true;
     const geodesic_draping::DrapeResult fastResult =
         geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, heatOptions, fastOptions);
-    if (!result.distances || !result.gradients || !result.vertexShearAnglesDegrees ||
+    if (!result.distances || !result.vertexShearAnglesDegrees ||
         !fastResult.faceShearAnglesDegrees || !fastResult.vertexShearAnglesDegrees) {
       throw std::runtime_error("debug solve did not return the expected fields");
+    }
+    if (!result.origin.intrinsicPoint ||
+        result.origin.intrinsicPoint->params.size() != 3 ||
+        !result.origin.extrinsicPoint ||
+        !result.origin.extrinsicFamilyDirections[0] ||
+        !result.origin.extrinsicFamilyDirections[1]) {
+      throw std::runtime_error("debug solve did not return the expected origin and direction references");
     }
 
     const Vec3 goldenOrigin = geodesic_draping::fixture_io::loadGoldenOrigin(fixtureDir);
@@ -235,35 +242,53 @@ int main(int argc, char** argv) {
               << "Vertices: " << mesh.vertices.size() << "  Faces: " << mesh.faces.size() << "\n"
               << "Seed XY: [" << seedXY.transpose() << "]  Angle degrees: " << angleDegrees << "\n\n";
 
-    printVectorComparison("origin", result.seed.cartesian, goldenOrigin);
+    printVectorComparison("origin", *result.origin.extrinsicPoint, goldenOrigin);
     std::cout << std::left << std::setw(18) << "face_index"
-              << " actual " << result.seed.surfacePoint.faceIndex
+              << " actual " << result.origin.intrinsicPoint->elementIndex
               << "  golden " << goldenFaceIndex;
-    if (result.seed.surfacePoint.faceIndex != goldenFaceIndex) {
+    if (result.origin.intrinsicPoint->elementIndex != goldenFaceIndex) {
       std::cout << "  note: valid tie-order differences can occur on edges/vertices";
     }
     std::cout << "\n";
-    printVectorComparison("barycentric", result.seed.surfacePoint.barycentric, goldenBarycentric);
+    printVectorComparison("barycentric",
+                          Vec3(result.origin.intrinsicPoint->params[0],
+                               result.origin.intrinsicPoint->params[1],
+                               result.origin.intrinsicPoint->params[2]),
+                          goldenBarycentric);
     std::cout << "\n";
 
-    for (size_t i = 0; i < result.directions.size(); ++i) {
-      printVectorComparison("direction " + std::to_string(i), result.directions[i], goldenDirections[i]);
+    const std::array<Vec3, 4> retrievedDirections = {
+        *result.origin.extrinsicFamilyDirections[0],
+        -*result.origin.extrinsicFamilyDirections[0],
+        *result.origin.extrinsicFamilyDirections[1],
+        -*result.origin.extrinsicFamilyDirections[1],
+    };
+    for (size_t i = 0; i < retrievedDirections.size(); ++i) {
+      printVectorComparison("direction " + std::to_string(i), retrievedDirections[i], goldenDirections[i]);
     }
     std::cout << "\n";
 
-    for (size_t i = 0; i < result.generators.size(); ++i) {
+    const std::array<const geodesic_draping::DrapeTrace*, 4> retrievedTraces = {
+        &result.traces[0].positive,
+        &result.traces[0].negative,
+        &result.traces[1].positive,
+        &result.traces[1].negative,
+    };
+    for (size_t i = 0; i < retrievedTraces.size(); ++i) {
       std::cout << "generator " << i
-                << " actual_points " << result.generators[i].points.size()
+                << " actual_points " << retrievedTraces[i]->extrinsicPoints.size()
                 << "  golden_points " << goldenGeneratorCounts[i]
-                << "  hit_boundary " << (result.generators[i].hitBoundary ? "true" : "false")
-                << "  length " << result.generators[i].length << "\n";
-      printVectorComparison("  end", result.generators[i].points.back(), goldenGeneratorEnds[i]);
+                << "  hit_boundary " << (retrievedTraces[i]->hitBoundary ? "true" : "false")
+                << "  length " << retrievedTraces[i]->length << "\n";
+      printVectorComparison("  end", retrievedTraces[i]->extrinsicPoints.back(), goldenGeneratorEnds[i]);
     }
     std::cout << "\n";
 
-    for (size_t i = 0; i < result.sourceCurves.curves.size(); ++i) {
+    for (size_t i = 0; i < result.traces.size(); ++i) {
+      const size_t actualRefs =
+          result.traces[i].negative.extrinsicPoints.size() + result.traces[i].positive.extrinsicPoints.size();
       std::cout << "source curve " << i
-                << " actual_refs " << result.sourceCurves.curves[i].size()
+                << " actual_refs " << actualRefs
                 << "  golden_refs " << goldenPairedCounts[i] << "\n";
     }
     std::cout << "\n";
@@ -284,12 +309,11 @@ int main(int argc, char** argv) {
     printStats("fast_face_shear", *fastResult.faceShearAnglesDegrees);
     printStats("fast_vertex_shear", *fastResult.vertexShearAnglesDegrees);
     std::cout << "\n";
-    const auto completeMagnitudeDiagnostics =
-        geodesic_draping::analyzeGradientMagnitudes(*result.gradients);
-    printMagnitudeDiagnostics("complete grad_0", completeMagnitudeDiagnostics[0]);
-    printMagnitudeDiagnostics("complete grad_1", completeMagnitudeDiagnostics[1]);
-
     auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
+    const auto completeDirections0 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, result.faceDirections[0]);
+    const auto completeDirections1 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, result.faceDirections[1]);
+    printMagnitudeDiagnostics("complete face dir_0", geodesic_draping::analyzeVectorMagnitudes(completeDirections0));
+    printMagnitudeDiagnostics("complete face dir_1", geodesic_draping::analyzeVectorMagnitudes(completeDirections1));
     const auto faceDirections0 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fastResult.faceDirections[0]);
     const auto faceDirections1 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fastResult.faceDirections[1]);
     printMagnitudeDiagnostics("fast face dir_0", geodesic_draping::analyzeVectorMagnitudes(faceDirections0));

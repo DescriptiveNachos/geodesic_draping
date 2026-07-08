@@ -57,10 +57,12 @@ void testAspectRatioWarning() {
 
   geodesic_draping::DrapeResult result;
   result.mode = geodesic_draping::DrapeSolveMode::Fast;
-  result.seed.cartesian = {0.1, 0.1, 0.0};
-  for (auto& generator : result.generators) {
-    generator.hitBoundary = true;
-    generator.length = 1.0;
+  result.origin.extrinsicPoint = geodesic_draping::Vec3{0.1, 0.1, 0.0};
+  for (auto& family : result.traces) {
+    family.positive.hitBoundary = true;
+    family.positive.length = 1.0;
+    family.negative.hitBoundary = true;
+    family.negative.length = 1.0;
   }
   result.faceShearAnglesDegrees = std::vector<double>{0.0, 0.0};
 

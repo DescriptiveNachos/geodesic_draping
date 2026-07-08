@@ -129,7 +129,6 @@ void testFixture(const std::filesystem::path& root,
   const auto complete = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, completeOptions);
   assert(hybrid.distances);
   assert(complete.distances);
-  assert(!hybrid.gradients);
   assert(hybrid.faceShearAnglesDegrees);
   assert(!hybrid.vertexShearAnglesDegrees);
   requireNearArray((*hybrid.distances)[0], (*complete.distances)[0], 1e-12, name + " one-shot hybrid dist_0");

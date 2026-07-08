@@ -51,12 +51,12 @@ std::vector<std::array<size_t, 3>> toPolyscopeFaces(const SurfaceMeshData& mesh)
   return out;
 }
 
-std::vector<Vec3> pairedGeneratorPoints(const GeneratorTrace& negativeTrace,
-                                        const GeneratorTrace& positiveTrace) {
+std::vector<Vec3> pairedTracePoints(const DrapeTrace& negativeTrace,
+                                    const DrapeTrace& positiveTrace) {
   std::vector<Vec3> points;
-  points.reserve(negativeTrace.points.size() + positiveTrace.points.size());
-  points.insert(points.end(), negativeTrace.points.rbegin(), negativeTrace.points.rend());
-  points.insert(points.end(), positiveTrace.points.begin(), positiveTrace.points.end());
+  points.reserve(negativeTrace.extrinsicPoints.size() + positiveTrace.extrinsicPoints.size());
+  points.insert(points.end(), negativeTrace.extrinsicPoints.rbegin(), negativeTrace.extrinsicPoints.rend());
+  points.insert(points.end(), positiveTrace.extrinsicPoints.begin(), positiveTrace.extrinsicPoints.end());
   return points;
 }
 
@@ -130,16 +130,25 @@ void applyDrapeComparisonDisplay(DrapeComparisonQuantities& quantities) {
   }
 }
 
-void registerSeedDirectionsAndGenerators(const std::string& name,
-                                         const SeedProjection& seed,
-                                         const std::array<Vec3, 4>& directions,
-                                         const std::array<GeneratorTrace, 4>& generators,
-                                         double directionLength) {
-  const Vec3& origin = seed.cartesian;
+void registerOriginDirectionsAndTraces(const std::string& name,
+                                       const DrapeResult& result,
+                                       double directionLength) {
+  if (!result.origin.extrinsicPoint ||
+      !result.origin.extrinsicFamilyDirections[0] ||
+      !result.origin.extrinsicFamilyDirections[1]) {
+    throw std::runtime_error("plotDrapeComparisonResult requires extrinsic origin and directions");
+  }
+  const Vec3& origin = *result.origin.extrinsicPoint;
   polyscope::registerPointCloud(name + " origin",
                                 std::vector<std::array<double, 3>>{{origin.x(), origin.y(), origin.z()}});
 
   const std::array<std::string, 4> labels = {"dir +0", "dir -0", "dir +90", "dir -90"};
+  const std::array<Vec3, 4> directions = {
+      *result.origin.extrinsicFamilyDirections[0],
+      -*result.origin.extrinsicFamilyDirections[0],
+      *result.origin.extrinsicFamilyDirections[1],
+      -*result.origin.extrinsicFamilyDirections[1],
+  };
   for (size_t i = 0; i < directions.size(); ++i) {
     const Vec3 endpoint = origin + directionLength * directions[i];
     polyscope::registerCurveNetworkLine(
@@ -150,14 +159,16 @@ void registerSeedDirectionsAndGenerators(const std::string& name,
         });
   }
 
-  for (size_t i = 0; i < generators.size(); ++i) {
-    polyscope::registerCurveNetworkLine(name + " generator " + std::to_string(i),
-                                        toPolyscopePoints(generators[i].points));
+  for (size_t i = 0; i < result.traces.size(); ++i) {
+    polyscope::registerCurveNetworkLine(name + " generator " + std::to_string(2 * i),
+                                        toPolyscopePoints(result.traces[i].positive.extrinsicPoints));
+    polyscope::registerCurveNetworkLine(name + " generator " + std::to_string(2 * i + 1),
+                                        toPolyscopePoints(result.traces[i].negative.extrinsicPoints));
   }
 
   for (size_t i = 0; i < 2; ++i) {
     const std::vector<Vec3> points =
-        pairedGeneratorPoints(generators[2 * i + 1], generators[2 * i]);
+        pairedTracePoints(result.traces[i].negative, result.traces[i].positive);
     polyscope::registerCurveNetworkLine(name + " source curve " + std::to_string(i),
                                         toPolyscopePoints(points));
   }
@@ -229,7 +240,7 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
                                const DrapeResult& fastResult,
                                const ProjectionPlotOptions& options) {
 #if GEODESIC_DRAPING_HAS_POLYSCOPE
-  if (!completeResult.distances || !completeResult.gradients || !completeResult.vertexShearAnglesDegrees) {
+  if (!completeResult.distances || !completeResult.vertexShearAnglesDegrees) {
     throw std::runtime_error("plotDrapeComparisonResult requires a complete-mode result");
   }
   if (!fastResult.faceShearAnglesDegrees || !fastResult.vertexShearAnglesDegrees) {
@@ -246,18 +257,25 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
       "complete dist_0", (*completeResult.distances)[0]);
   quantities->completeDistance1 = psMesh->addVertexSignedDistanceQuantity(
       "complete dist_1", (*completeResult.distances)[1]);
-  quantities->completeGradient0 = psMesh->addVertexVectorQuantity(
-      "complete grad_0", toPolyscopePoints((*completeResult.gradients)[0]), polyscope::VectorType::AMBIENT);
-  quantities->completeGradient1 = psMesh->addVertexVectorQuantity(
-      "complete grad_1", toPolyscopePoints((*completeResult.gradients)[1]), polyscope::VectorType::AMBIENT);
-  const auto completeMagnitudeDiagnostics = analyzeGradientMagnitudes(*completeResult.gradients);
-  quantities->completeGradient0Deviation = psMesh->addVertexScalarQuantity(
-      "abs(|complete grad_0| - 1)", completeMagnitudeDiagnostics[0].absDeviationFromUnit);
-  quantities->completeGradient1Deviation = psMesh->addVertexScalarQuantity(
-      "abs(|complete grad_1| - 1)", completeMagnitudeDiagnostics[1].absDeviationFromUnit);
+  GeometryCentralSurface surface = makeGeometryCentralSurface(mesh);
+  const std::vector<Vec3> completeDirections0 = faceDirectionsToExtrinsicVectors(
+      surface,
+      completeResult.faceDirections[0]);
+  const std::vector<Vec3> completeDirections1 = faceDirectionsToExtrinsicVectors(
+      surface,
+      completeResult.faceDirections[1]);
+  quantities->completeGradient0 = psMesh->addFaceVectorQuantity(
+      "complete grad_0", toPolyscopePoints(completeDirections0), polyscope::VectorType::AMBIENT);
+  quantities->completeGradient1 = psMesh->addFaceVectorQuantity(
+      "complete grad_1", toPolyscopePoints(completeDirections1), polyscope::VectorType::AMBIENT);
+  const auto completeMagnitudeDiagnostics0 = analyzeVectorMagnitudes(completeDirections0);
+  const auto completeMagnitudeDiagnostics1 = analyzeVectorMagnitudes(completeDirections1);
+  quantities->completeGradient0Deviation = psMesh->addFaceScalarQuantity(
+      "abs(|complete grad_0| - 1)", completeMagnitudeDiagnostics0.absDeviationFromUnit);
+  quantities->completeGradient1Deviation = psMesh->addFaceScalarQuantity(
+      "abs(|complete grad_1| - 1)", completeMagnitudeDiagnostics1.absDeviationFromUnit);
   quantities->completeShear = psMesh->addVertexScalarQuantity(
       "complete shear_degrees", *completeResult.vertexShearAnglesDegrees);
-  GeometryCentralSurface surface = makeGeometryCentralSurface(mesh);
   const std::vector<Vec3> fastFaceDirections0 = faceDirectionsToExtrinsicVectors(
       surface,
       fastResult.faceDirections[0]);
@@ -280,11 +298,7 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
       "fast vertex shear_degrees", *fastResult.vertexShearAnglesDegrees);
   applyDrapeComparisonDisplay(*quantities);
 
-  registerSeedDirectionsAndGenerators(options.name,
-                                      completeResult.seed,
-                                      completeResult.directions,
-                                      completeResult.generators,
-                                      options.directionLength);
+  registerOriginDirectionsAndTraces(options.name, completeResult, options.directionLength);
 
   polyscope::state::userCallback = [quantities]() {
     bool changed = false;

@@ -42,7 +42,6 @@ void requireNearArray(const std::vector<double>& actual,
 void requireFiniteComplete(const geodesic_draping::DrapeResult& result, size_t nVertices) {
   assert(result.mode == geodesic_draping::DrapeSolveMode::Complete);
   assert(result.distances);
-  assert(result.gradients);
   assert(result.vertexShearAnglesDegrees);
   for (const auto& distance : *result.distances) {
     assert(distance.size() == nVertices);
@@ -50,9 +49,9 @@ void requireFiniteComplete(const geodesic_draping::DrapeResult& result, size_t n
       assert(std::isfinite(value));
     }
   }
-  for (const auto& gradient : *result.gradients) {
-    assert(gradient.size() == nVertices);
-    for (const auto& value : gradient) {
+  for (const auto& directions : result.faceDirections) {
+    assert(!directions.empty());
+    for (const auto& value : directions) {
       assert(std::isfinite(value.x()));
       assert(std::isfinite(value.y()));
       assert(std::isfinite(value.z()));
@@ -61,9 +60,6 @@ void requireFiniteComplete(const geodesic_draping::DrapeResult& result, size_t n
   assert(result.vertexShearAnglesDegrees->size() == nVertices);
   for (double value : *result.vertexShearAnglesDegrees) {
     assert(std::isfinite(value));
-  }
-  for (const auto& directions : result.faceDirections) {
-    assert(!directions.empty());
   }
 }
 
@@ -104,7 +100,6 @@ void testOneShotComplete(const std::filesystem::path& root, const std::string& n
 
   const auto oneShot = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions(), solveOptions);
   assert(oneShot.distances);
-  assert(oneShot.gradients);
   assert(!oneShot.faceShearAnglesDegrees);
   assert(oneShot.vertexShearAnglesDegrees);
   requireNearArray((*oneShot.distances)[0], (*oneShot.distances)[0], 1e-12, name + " one-shot complete dist_0");
@@ -131,8 +126,8 @@ void requireFiniteFaceShear(const geodesic_draping::DrapeResult& result, const s
       throw std::runtime_error(label + " contains non-finite face shear");
     }
   }
-  for (const auto& generator : result.generators) {
-    if (generator.surfaceReferences.empty()) {
+  for (const auto& family : result.traces) {
+    if (family.positive.extrinsicPoints.empty() || family.negative.extrinsicPoints.empty()) {
       throw std::runtime_error(label + " returned an empty generator trace");
     }
   }

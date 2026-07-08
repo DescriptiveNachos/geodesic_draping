@@ -736,6 +736,8 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
     gcs::CommonSubdivision& subdivision = activeDomain_.triangulation().getCommonSubdivision();
     subdivision.constructMesh();
     result.mesh = makeSubdivisionResultMesh(subdivision, *reference_.surface().geometry);
+    result.origin.intrinsicPoint = core.intrinsicSeed;
+    result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
     result.origin.extrinsicPoint = core.seed.cartesian;
     result.origin.extrinsicFamilyDirections = {core.directions[0], core.directions[2]};
     result.traces = makeTraceFamilies(core.generators, ResultDomain::Subdivision);
@@ -767,16 +769,12 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
     }
   } else {
     result.mesh = makeExtrinsicResultMesh(reference_.meshData());
+    result.origin.intrinsicPoint = core.intrinsicSeed;
+    result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
     result.origin.extrinsicPoint = core.seed.cartesian;
     result.origin.extrinsicFamilyDirections = {core.directions[0], core.directions[2]};
     result.traces = makeTraceFamilies(core.generators, ResultDomain::Extrinsic);
-    result.seed = core.seed;
-    result.directions = core.directions;
-    result.generators = core.generators;
-    result.sourceCurves = core.sourceCurves;
-    result.customHeatSolves = core.customHeatSolves;
     result.faceDirections = core.faceDirections;
-    result.gradients = core.gradients;
 
     if (core.distances) {
       if ((*core.distances)[0].size() == reference_.meshData().vertices.size()) {

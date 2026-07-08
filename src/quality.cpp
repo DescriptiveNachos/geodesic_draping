@@ -164,8 +164,11 @@ MeshQualityStats analyzeMeshQuality(const SurfaceMeshData& mesh) {
 GeneratorQualityStats analyzeGeneratorQuality(const SurfaceMeshData& mesh,
                                               const DrapeResult& result,
                                               const SolveQualityThresholds& thresholds) {
+  if (!result.origin.extrinsicPoint) {
+    throw std::runtime_error("generator quality analysis requires an extrinsic result origin");
+  }
   const BboxXY bbox = computeBboxXY(mesh);
-  const Vec3& seed = result.seed.cartesian;
+  const Vec3& seed = *result.origin.extrinsicPoint;
   const std::array<double, 4> wallDistances{
       seed.x() - bbox.minX,
       bbox.maxX - seed.x(),
@@ -179,17 +182,19 @@ GeneratorQualityStats analyzeGeneratorQuality(const SurfaceMeshData& mesh,
   stats.plausibleMinLength = thresholds.generatorMinLengthFraction * stats.nearestWallDistance;
   stats.plausibleMaxLength = thresholds.generatorMaxLengthMultiplier * stats.farthestWallDistance;
 
-  stats.lengths.reserve(result.generators.size());
-  for (const GeneratorTrace& generator : result.generators) {
-    stats.lengths.push_back(generator.length);
-    if (!generator.hitBoundary) {
-      ++stats.missedBoundaryCount;
-    }
-    if (generator.length < stats.plausibleMinLength) {
-      ++stats.shortGeneratorCount;
-    }
-    if (generator.length > stats.plausibleMaxLength) {
-      ++stats.longGeneratorCount;
+  stats.lengths.reserve(4);
+  for (const TraceFamily& family : result.traces) {
+    for (const DrapeTrace* trace : {&family.positive, &family.negative}) {
+      stats.lengths.push_back(trace->length);
+      if (!trace->hitBoundary) {
+        ++stats.missedBoundaryCount;
+      }
+      if (trace->length < stats.plausibleMinLength) {
+        ++stats.shortGeneratorCount;
+      }
+      if (trace->length > stats.plausibleMaxLength) {
+        ++stats.longGeneratorCount;
+      }
     }
   }
   return stats;

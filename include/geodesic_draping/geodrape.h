@@ -102,15 +102,8 @@ struct DrapeResult {
   DrapeOrigin origin;
   std::array<TraceFamily, 2> traces;
 
-  // Legacy/debug fields retained during the retrieval architecture migration.
-  SeedProjection seed;
-  std::array<Vec3, 4> directions;
-  std::array<GeneratorTrace, 4> generators;
-  SourceCurves sourceCurves;
-  std::array<CustomSignedHeatResult, 2> customHeatSolves;
   std::array<FaceHeatDirectionField, 2> faceDirections;
   std::optional<std::array<std::vector<double>, 2>> distances;
-  std::optional<std::array<std::vector<Vec3>, 2>> gradients;
   std::optional<std::vector<double>> faceShearAnglesDegrees;
   std::optional<std::vector<double>> vertexShearAnglesDegrees;
 };
