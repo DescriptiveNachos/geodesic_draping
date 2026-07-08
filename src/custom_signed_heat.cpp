@@ -685,6 +685,14 @@ std::vector<double> computeFaceShearAnglesDegrees(
     const FaceHeatDirectionField& normalizedFaceDirections1) {
   auto& mesh = *surface.mesh;
   auto& geometry = *surface.geometry;
+  return computeFaceShearAnglesDegrees(mesh, geometry, normalizedFaceDirections0, normalizedFaceDirections1);
+}
+
+std::vector<double> computeFaceShearAnglesDegrees(
+    gcs::SurfaceMesh& mesh,
+    gcs::IntrinsicGeometryInterface& geometry,
+    const FaceHeatDirectionField& normalizedFaceDirections0,
+    const FaceHeatDirectionField& normalizedFaceDirections1) {
   if (normalizedFaceDirections0.size() != mesh.nFaces() ||
       normalizedFaceDirections1.size() != mesh.nFaces()) {
     throw std::runtime_error("computeFaceShearAnglesDegrees requires one direction per face");

@@ -108,6 +108,11 @@ std::vector<double> computeFaceShearAnglesDegrees(
     GeometryCentralSurface& surface,
     const FaceHeatDirectionField& normalizedFaceDirections0,
     const FaceHeatDirectionField& normalizedFaceDirections1);
+std::vector<double> computeFaceShearAnglesDegrees(
+    geometrycentral::surface::SurfaceMesh& mesh,
+    geometrycentral::surface::IntrinsicGeometryInterface& geometry,
+    const FaceHeatDirectionField& normalizedFaceDirections0,
+    const FaceHeatDirectionField& normalizedFaceDirections1);
 
 CustomSignedHeatResult computeCustomSignedHeat(GeometryCentralSurface& surface,
                                                          const std::vector<SurfaceReference>& sourceCurve,

@@ -119,6 +119,47 @@ void testOneShotComplete(const std::filesystem::path& root, const std::string& n
   assert(sampled.faceShearAnglesDegrees->size() == mesh.faces.size());
 }
 
+void requireFiniteFaceShear(const geodesic_draping::DrapeResult& result, const std::string& label) {
+  if (!result.faceShearAnglesDegrees) {
+    throw std::runtime_error(label + " did not return face shear");
+  }
+  if (result.faceShearAnglesDegrees->empty()) {
+    throw std::runtime_error(label + " returned empty face shear");
+  }
+  for (double value : *result.faceShearAnglesDegrees) {
+    if (!std::isfinite(value)) {
+      throw std::runtime_error(label + " contains non-finite face shear");
+    }
+  }
+  for (const auto& generator : result.generators) {
+    if (generator.surfaceReferences.empty()) {
+      throw std::runtime_error(label + " returned an empty generator trace");
+    }
+  }
+}
+
+void testRefinementSmoke(const std::filesystem::path& root) {
+  const std::filesystem::path fixtureDir = root / "small_curved";
+  const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
+  const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
+  const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
+
+  geodesic_draping::DrapeSolveOptions options;
+  options.mode = geodesic_draping::DrapeSolveMode::Fast;
+  options.sampleVertexShear = false;
+
+  geodesic_draping::RefinementOptions flip;
+  flip.mode = geodesic_draping::RefinementMode::DelaunayFlip;
+  geodesic_draping::GeoDrapeSolver flipSolver(mesh, fixtureHeatOptions(), {}, flip);
+  requireFiniteFaceShear(flipSolver.solve(seedXY, angleDegrees, options), "delaunay flip smoke");
+
+  geodesic_draping::RefinementOptions refine;
+  refine.mode = geodesic_draping::RefinementMode::DelaunayRefine;
+  refine.maxInsertions = 4;
+  geodesic_draping::GeoDrapeSolver refineSolver(mesh, fixtureHeatOptions(), {}, refine);
+  requireFiniteFaceShear(refineSolver.solve(seedXY, angleDegrees, options), "delaunay refine smoke");
+}
+
 } // namespace
 
 int main() {
@@ -154,6 +195,12 @@ int main() {
   requireFiniteComplete(demo, geodesic_draping::fixture_io::loadMesh(fixtureRoot / "demo_part").vertices.size());
   testPersistentSolver(fixtureRoot, "demo_part");
   testOneShotComplete(fixtureRoot, "tiny_planar");
+  try {
+    testRefinementSmoke(fixtureRoot);
+  } catch (const std::exception& e) {
+    std::cerr << "refinement smoke failed: " << e.what() << "\n";
+    return 1;
+  }
 
   return 0;
 }

@@ -1,6 +1,7 @@
 #include "geodesic_draping/geodrape.h"
 
 #include "geometrycentral/surface/signpost_intrinsic_triangulation.h"
+#include "geometrycentral/surface/trace_geodesic.h"
 
 #include <cmath>
 #include <limits>
@@ -13,6 +14,10 @@ namespace gcs = geometrycentral::surface;
 namespace {
 
 constexpr double pi = 3.141592653589793238462643383279502884;
+
+geometrycentral::Vector3 toGcVector3(const Vec3& value) {
+  return geometrycentral::Vector3{value.x(), value.y(), value.z()};
+}
 
 std::array<Vec3, 4> generateFamilyDirections(double fabricAngleDegrees,
                                              double fiberAngleDegrees) {
@@ -55,10 +60,210 @@ double boundingBoxDiagonal(const SurfaceMeshData& meshData) {
 
 TraceSettings makeTraceDefaults(const SurfaceMeshData& meshData,
                                 const gcs::SurfaceMesh& activeMesh) {
+  (void)meshData;
+  (void)activeMesh;
   TraceSettings settings;
-  settings.traceLength = 100.0 * boundingBoxDiagonal(meshData);
-  settings.maxIterations = std::max<size_t>(100, 100 * activeMesh.nFaces());
   return settings;
+}
+
+gcs::SurfacePoint toFaceSurfacePoint(gcs::SurfaceMesh& mesh, const BarycentricPoint& point) {
+  return gcs::SurfacePoint(
+      mesh.face(point.faceIndex),
+      geometrycentral::Vector3{
+          point.barycentric.x(),
+          point.barycentric.y(),
+          point.barycentric.z(),
+      });
+}
+
+gcs::BarycentricVector normalizeVector(gcs::BarycentricVector vector,
+                                       gcs::IntrinsicGeometryInterface& geometry) {
+  const double magnitude = vector.norm(geometry);
+  if (magnitude == 0.0) {
+    throw std::runtime_error("cannot normalize zero tangent direction");
+  }
+  return vector / magnitude;
+}
+
+gcs::BarycentricVector faceTangentVectorToBarycentric(gcs::Face face,
+                                                      const geometrycentral::Vector2& tangentVector,
+                                                      gcs::IntrinsicGeometryInterface& geometry) {
+  geometry.requireHalfedgeVectorsInFace();
+  const geometrycentral::Vector2 p1 = geometry.halfedgeVectorsInFace[face.halfedge()];
+  const geometrycentral::Vector2 p2 = -geometry.halfedgeVectorsInFace[face.halfedge().next().next()];
+  const double det = p1.x * p2.y - p1.y * p2.x;
+  if (det == 0.0) {
+    geometry.unrequireHalfedgeVectorsInFace();
+    throw std::runtime_error("cannot convert tangent vector on degenerate face");
+  }
+  const double b1 = (tangentVector.x * p2.y - tangentVector.y * p2.x) / det;
+  const double b2 = (p1.x * tangentVector.y - p1.y * tangentVector.x) / det;
+  geometry.unrequireHalfedgeVectorsInFace();
+  return gcs::BarycentricVector(face, geometrycentral::Vector3{-b1 - b2, b1, b2});
+}
+
+gcs::BarycentricVector embeddedActiveFaceDirection(ReferenceGeometry& reference,
+                                                  ActiveIntrinsicDomain& activeDomain,
+                                                  gcs::Face activeFace,
+                                                  double angleDegrees) {
+  std::array<Vec3, 3> positions;
+  size_t i = 0;
+  for (gcs::Vertex vertex : activeFace.adjacentVertices()) {
+    const gcs::SurfacePoint inputPoint = activeDomain.intrinsicToInput(gcs::SurfacePoint(vertex));
+    positions[i] = interpolateSurfacePoint(inputPoint, *reference.surface().geometry);
+    ++i;
+  }
+
+  const Vec3 ambient(std::cos(angleDegrees * pi / 180.0),
+                     std::sin(angleDegrees * pi / 180.0),
+                     0.0);
+  const Vec3 e1 = positions[1] - positions[0];
+  const Vec3 e2 = positions[2] - positions[0];
+  Eigen::Matrix2d gram;
+  gram << e1.dot(e1), e1.dot(e2),
+          e2.dot(e1), e2.dot(e2);
+  Eigen::Vector2d rhs;
+  rhs << ambient.dot(e1), ambient.dot(e2);
+  const Eigen::Vector2d uv = gram.ldlt().solve(rhs);
+  return normalizeVector(
+      gcs::BarycentricVector(activeFace, geometrycentral::Vector3{-uv.x() - uv.y(), uv.x(), uv.y()}),
+      activeDomain.geometry());
+}
+
+gcs::BarycentricVector intrinsicDirectionFromInputAngle(ReferenceGeometry& reference,
+                                                       ActiveIntrinsicDomain& activeDomain,
+                                                       const gcs::SurfacePoint& inputSeed,
+                                                       const gcs::SurfacePoint& intrinsicSeed,
+                                                       double angleDegrees,
+                                                       bool preservesInputConnectivity) {
+  auto& inputGeometry = *reference.surface().geometry;
+  const gcs::SurfacePoint inputFaceSeed = inputSeed.inSomeFace();
+  inputGeometry.requireFaceTangentBasis();
+
+  const Vec3 ambientDirection(std::cos(angleDegrees * pi / 180.0),
+                              std::sin(angleDegrees * pi / 180.0),
+                              0.0);
+  const geometrycentral::Vector3 ambient = toGcVector3(ambientDirection);
+  const geometrycentral::Vector3 basisX = inputGeometry.faceTangentBasis[inputFaceSeed.face][0];
+  const geometrycentral::Vector3 basisY = inputGeometry.faceTangentBasis[inputFaceSeed.face][1];
+  geometrycentral::Vector2 tangentDirection{
+      dot(ambient, basisX),
+      dot(ambient, basisY),
+  };
+  inputGeometry.unrequireFaceTangentBasis();
+
+  const double tangentNorm = norm(tangentDirection);
+  if (tangentNorm == 0.0) {
+    throw std::runtime_error("fabric direction is degenerate in the seed tangent plane");
+  }
+  tangentDirection /= tangentNorm;
+
+  if (preservesInputConnectivity) {
+    const gcs::SurfacePoint intrinsicSeedFace = intrinsicSeed.inSomeFace();
+    return normalizeVector(
+        faceTangentVectorToBarycentric(intrinsicSeedFace.face, tangentDirection, activeDomain.geometry()),
+        activeDomain.geometry());
+  }
+
+  const double baseStep = std::max(1e-9, 1e-6 * boundingBoxDiagonal(reference.meshData()));
+  gcs::TraceOptions options;
+  options.includePath = false;
+  options.errorOnProblem = false;
+  options.maxIters = 16;
+
+  const gcs::SurfacePoint intrinsicSeedFace = intrinsicSeed.inSomeFace();
+  for (size_t attempt = 0; attempt < 8; ++attempt) {
+    const double step = baseStep * std::pow(0.25, static_cast<double>(attempt));
+    const gcs::TraceGeodesicResult inputTrace =
+        gcs::traceGeodesic(inputGeometry, inputSeed, step * tangentDirection, options);
+    const gcs::SurfacePoint intrinsicEndpoint =
+        activeDomain.inputToIntrinsic(inputTrace.endPoint).inSomeFace();
+    try {
+      const gcs::SurfacePoint endpointInSeedFace = intrinsicEndpoint.inFace(intrinsicSeedFace.face);
+      return normalizeVector(gcs::BarycentricVector(intrinsicSeedFace, endpointInSeedFace),
+                             activeDomain.geometry());
+    } catch (const std::exception&) {
+      // Retry with a shorter local displacement if the mapped endpoint crossed a face boundary.
+    }
+  }
+
+  return embeddedActiveFaceDirection(reference, activeDomain, intrinsicSeedFace.face, angleDegrees);
+}
+
+GeneratorTrace traceActiveGenerator(ReferenceGeometry& reference,
+                                    ActiveIntrinsicDomain& activeDomain,
+                                    const gcs::SurfacePoint& start,
+                                    const gcs::BarycentricVector& direction,
+                                    const TraceSettings& settings) {
+  gcs::SurfacePoint startFace = start.inSomeFace();
+  gcs::BarycentricVector directionInFace = direction.inFace(startFace.face);
+  directionInFace = normalizeVector(directionInFace, activeDomain.geometry()) * settings.traceLength;
+
+  gcs::TraceOptions options;
+  options.includePath = true;
+  options.errorOnProblem = false;
+  options.barrierEdges = nullptr;
+  options.maxIters = settings.maxIterations;
+
+  const gcs::TraceGeodesicResult traced = gcs::traceGeodesic(
+      activeDomain.geometry(),
+      startFace.face,
+      startFace.faceCoords,
+      directionInFace.faceCoords,
+      options);
+  if (!traced.hasPath) {
+    throw std::runtime_error("active traceGeodesic did not return a path");
+  }
+
+  GeneratorTrace trace;
+  trace.hitBoundary = traced.hitBoundary;
+  trace.length = traced.length;
+  trace.points.reserve(traced.pathPoints.size());
+  trace.surfaceReferences.reserve(traced.pathPoints.size());
+  for (const gcs::SurfacePoint& intrinsicPoint : traced.pathPoints) {
+    trace.surfaceReferences.push_back(toSurfaceReference(intrinsicPoint));
+    const gcs::SurfacePoint inputPoint = activeDomain.intrinsicToInput(intrinsicPoint);
+    trace.points.push_back(interpolateSurfacePoint(inputPoint, *reference.surface().geometry));
+  }
+  return trace;
+}
+
+std::array<GeneratorTrace, 4> traceActiveGenerators(ReferenceGeometry& reference,
+                                                    ActiveIntrinsicDomain& activeDomain,
+                                                    const gcs::SurfacePoint& start,
+                                                    const std::array<gcs::BarycentricVector, 4>& directions,
+                                                    const TraceSettings& settings) {
+  return {
+      traceActiveGenerator(reference, activeDomain, start, directions[0], settings),
+      traceActiveGenerator(reference, activeDomain, start, directions[1], settings),
+      traceActiveGenerator(reference, activeDomain, start, directions[2], settings),
+      traceActiveGenerator(reference, activeDomain, start, directions[3], settings),
+  };
+}
+
+FaceHeatDirectionField computeIntrinsicFaceScalarGradients(gcs::SurfaceMesh& mesh,
+                                                           gcs::IntrinsicGeometryInterface& geometry,
+                                                           const std::vector<double>& scalarField) {
+  if (scalarField.size() != mesh.nVertices()) {
+    throw std::runtime_error("computeIntrinsicFaceScalarGradients requires one scalar per active vertex");
+  }
+
+  FaceHeatDirectionField gradients(mesh.nFaces(), Vec3::Zero());
+  for (gcs::Face face : mesh.faces()) {
+    gcs::BarycentricVector gradient(face);
+    for (gcs::Halfedge halfedge : face.adjacentHalfedges()) {
+      const gcs::BarycentricVector edgeVector(halfedge.next(), face);
+      const gcs::BarycentricVector edgePerp = edgeVector.rotate90(geometry);
+      gradient += edgePerp * scalarField[halfedge.vertex().getIndex()];
+    }
+    const double magnitude = gradient.norm(geometry);
+    if (magnitude > 0.0) {
+      gradient /= magnitude;
+    }
+    gradients[face.getIndex()] =
+        Vec3(gradient.faceCoords.x, gradient.faceCoords.y, gradient.faceCoords.z);
+  }
+  return gradients;
 }
 
 } // namespace
@@ -113,6 +318,14 @@ gcs::IntrinsicTriangulation& ActiveIntrinsicDomain::triangulation() {
   return *triangulation_;
 }
 
+gcs::SurfacePoint ActiveIntrinsicDomain::inputToIntrinsic(const gcs::SurfacePoint& pointOnInput) {
+  return triangulation_->equivalentPointOnIntrinsic(pointOnInput);
+}
+
+gcs::SurfacePoint ActiveIntrinsicDomain::intrinsicToInput(const gcs::SurfacePoint& pointOnIntrinsic) {
+  return triangulation_->equivalentPointOnInput(pointOnIntrinsic);
+}
+
 GeoDrapeSolver::GeoDrapeSolver(SurfaceMeshData meshData,
                                const SignedHeatSolveOptions& heatOptions)
     : GeoDrapeSolver(std::move(meshData), heatOptions, {}, {}) {}
@@ -126,9 +339,10 @@ GeoDrapeSolver::GeoDrapeSolver(SurfaceMeshData meshData,
       traceDefaults_(makeTraceDefaults(reference_.meshData(), activeDomain_.mesh())),
       heatOptions_(heatOptions),
       customHeatSolver_(std::make_unique<CustomSignedHeatSolver>(
-          activeDomain_.mesh(),
-          activeDomain_.geometry(),
-          heatOptions_.diffusionTimeCoefficient)) {}
+      activeDomain_.mesh(),
+      activeDomain_.geometry(),
+      heatOptions_.diffusionTimeCoefficient)),
+      preservesInputConnectivity_(refinementOptions.mode == RefinementMode::None) {}
 
 DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
                                   double angleDegrees,
@@ -174,10 +388,27 @@ IntrinsicSolveInput GeoDrapeSolver::adaptExtrinsicInput(const Vec2& seedXY,
   if (!seed) {
     throw std::runtime_error("GeoDrapeSolver failed to project seed point to mesh");
   }
+  const gcs::SurfacePoint inputSeed = toFaceSurfacePoint(*reference_.surface().mesh, seed->surfacePoint);
+  const gcs::SurfacePoint intrinsicSeed = activeDomain_.inputToIntrinsic(inputSeed).inSomeFace();
+  const gcs::BarycentricVector direction0 = intrinsicDirectionFromInputAngle(
+      reference_,
+      activeDomain_,
+      inputSeed,
+      intrinsicSeed,
+      fabricAngleDegrees,
+      preservesInputConnectivity_);
+  const gcs::BarycentricVector direction1 = intrinsicDirectionFromInputAngle(
+      reference_,
+      activeDomain_,
+      inputSeed,
+      intrinsicSeed,
+      fabricAngleDegrees + fiberAngleDegrees,
+      preservesInputConnectivity_);
 
   IntrinsicSolveInput input;
-  input.seed = seed->surfacePoint;
-  input.directions = generateFamilyDirections(fabricAngleDegrees, fiberAngleDegrees);
+  input.seed = intrinsicSeed;
+  input.directions = {direction0, -direction0, direction1, -direction1};
+  input.cartesianDirections = generateFamilyDirections(fabricAngleDegrees, fiberAngleDegrees);
   input.mode = mode;
   input.trace = trace;
   return input;
@@ -186,20 +417,32 @@ IntrinsicSolveInput GeoDrapeSolver::adaptExtrinsicInput(const Vec2& seedXY,
 CoreIntrinsicResult GeoDrapeSolver::solveCore(const IntrinsicSolveInput& input) {
   CoreIntrinsicResult result;
   result.mode = input.mode;
-  result.directions = input.directions;
-  result.seed.surfacePoint = input.seed;
+  result.directions = input.cartesianDirections;
+  const gcs::SurfacePoint inputSeed = activeDomain_.intrinsicToInput(input.seed).inSomeFace();
+  result.seed.surfacePoint.faceIndex = inputSeed.face.getIndex();
+  result.seed.surfacePoint.barycentric =
+      Vec3(inputSeed.faceCoords.x, inputSeed.faceCoords.y, inputSeed.faceCoords.z);
 
-  const Face& face = reference_.meshData().faces.at(input.seed.faceIndex);
+  const Face& face = reference_.meshData().faces.at(result.seed.surfacePoint.faceIndex);
   result.seed.cartesian =
-      input.seed.barycentric(0) * reference_.meshData().vertices[face[0]] +
-      input.seed.barycentric(1) * reference_.meshData().vertices[face[1]] +
-      input.seed.barycentric(2) * reference_.meshData().vertices[face[2]];
+      result.seed.surfacePoint.barycentric(0) * reference_.meshData().vertices[face[0]] +
+      result.seed.surfacePoint.barycentric(1) * reference_.meshData().vertices[face[1]] +
+      result.seed.surfacePoint.barycentric(2) * reference_.meshData().vertices[face[2]];
 
-  result.generators = traceGenerators(
-      reference_.surface(),
-      result.seed.surfacePoint,
-      result.directions,
-      input.trace);
+  if (preservesInputConnectivity_) {
+    result.generators = traceGenerators(
+        reference_.surface(),
+        result.seed.surfacePoint,
+        result.directions,
+        input.trace);
+  } else {
+    result.generators = traceActiveGenerators(
+        reference_,
+        activeDomain_,
+        input.seed,
+        input.directions,
+        input.trace);
+  }
   result.sourceCurves = pairOppositeGeneratorTraces(result.generators);
 
   const bool computeDistances = input.mode != DrapeSolveMode::Fast;
@@ -216,15 +459,28 @@ CoreIntrinsicResult GeoDrapeSolver::solveCore(const IntrinsicSolveInput& input) 
   }
 
   if (input.mode == DrapeSolveMode::Complete) {
-    result.gradients = std::array<std::vector<Vec3>, 2>{};
-    (*result.gradients)[0] = computeVertexScalarGradients(reference_.meshData(), (*result.distances)[0]);
-    (*result.gradients)[1] = computeVertexScalarGradients(reference_.meshData(), (*result.distances)[1]);
-    result.faceShearAnglesDegrees = averageVertexScalarsToFaces(
-        reference_.meshData(),
-        computeShearAnglesDegrees((*result.gradients)[0], (*result.gradients)[1]));
+    result.faceDirections[0] = computeIntrinsicFaceScalarGradients(
+        activeDomain_.mesh(),
+        activeDomain_.geometry(),
+        (*result.distances)[0]);
+    result.faceDirections[1] = computeIntrinsicFaceScalarGradients(
+        activeDomain_.mesh(),
+        activeDomain_.geometry(),
+        (*result.distances)[1]);
+    if ((*result.distances)[0].size() == reference_.meshData().vertices.size()) {
+      result.gradients = std::array<std::vector<Vec3>, 2>{};
+      (*result.gradients)[0] = computeVertexScalarGradients(reference_.meshData(), (*result.distances)[0]);
+      (*result.gradients)[1] = computeVertexScalarGradients(reference_.meshData(), (*result.distances)[1]);
+    }
+    result.faceShearAnglesDegrees = computeFaceShearAnglesDegrees(
+        activeDomain_.mesh(),
+        activeDomain_.geometry(),
+        result.faceDirections[0],
+        result.faceDirections[1]);
   } else {
     result.faceShearAnglesDegrees = computeFaceShearAnglesDegrees(
-        reference_.surface(),
+        activeDomain_.mesh(),
+        activeDomain_.geometry(),
         result.faceDirections[0],
         result.faceDirections[1]);
   }

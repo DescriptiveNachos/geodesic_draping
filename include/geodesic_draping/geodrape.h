@@ -5,6 +5,8 @@
 #include "geodesic_draping/custom_signed_heat.h"
 
 #include "geometrycentral/surface/intrinsic_triangulation.h"
+#include "geometrycentral/surface/barycentric_vector.h"
+#include "geometrycentral/surface/surface_point.h"
 
 #include <array>
 #include <memory>
@@ -94,14 +96,19 @@ public:
   geometrycentral::surface::ManifoldSurfaceMesh& mesh();
   geometrycentral::surface::IntrinsicGeometryInterface& geometry();
   geometrycentral::surface::IntrinsicTriangulation& triangulation();
+  geometrycentral::surface::SurfacePoint inputToIntrinsic(
+      const geometrycentral::surface::SurfacePoint& pointOnInput);
+  geometrycentral::surface::SurfacePoint intrinsicToInput(
+      const geometrycentral::surface::SurfacePoint& pointOnIntrinsic);
 
 private:
   std::unique_ptr<geometrycentral::surface::IntrinsicTriangulation> triangulation_;
 };
 
 struct IntrinsicSolveInput {
-  BarycentricPoint seed;
-  std::array<Vec3, 4> directions;
+  geometrycentral::surface::SurfacePoint seed;
+  std::array<geometrycentral::surface::BarycentricVector, 4> directions;
+  std::array<Vec3, 4> cartesianDirections;
   DrapeSolveMode mode = DrapeSolveMode::Complete;
   TraceSettings trace;
 };
@@ -155,6 +162,7 @@ private:
   SignedHeatSolveOptions heatOptions_;
   std::unique_ptr<CustomSignedHeatSolver> customHeatSolver_;
   std::optional<CoreIntrinsicResult> lastIntrinsicResult_;
+  bool preservesInputConnectivity_ = true;
 };
 
 DrapeResult solveDrape(const SurfaceMeshData& mesh,

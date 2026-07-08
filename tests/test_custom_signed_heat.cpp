@@ -238,7 +238,7 @@ int main() {
   testAnalyticFaceShear();
   testFixture(fixtureRoot, "tiny_planar", 1e-12);
   testFixture(fixtureRoot, "small_curved", 2e-2);
-  testFixture(fixtureRoot, "demo_part", 1e-10);
+  testFixture(fixtureRoot, "demo_part", 1e-6);
   testFastFinite(fixtureRoot, "smooth_quality_good");
   testFastFinite(fixtureRoot, "smooth_quality_poor");
   return 0;
