@@ -344,6 +344,51 @@ ResultMesh makeIntrinsicResultMesh(gcs::SurfaceMesh& mesh,
   return out;
 }
 
+std::vector<Vec3> toVec3Vector(const gcs::VertexData<geometrycentral::Vector3>& values) {
+  std::vector<Vec3> out(values.getMesh()->nVertices(), Vec3::Zero());
+  for (gcs::Vertex vertex : values.getMesh()->vertices()) {
+    const geometrycentral::Vector3& value = values[vertex];
+    out[vertex.getIndex()] = Vec3(value.x, value.y, value.z);
+  }
+  return out;
+}
+
+std::vector<double> vertexDataToVector(const gcs::VertexData<double>& values) {
+  std::vector<double> out(values.getMesh()->nVertices(), 0.0);
+  for (gcs::Vertex vertex : values.getMesh()->vertices()) {
+    out[vertex.getIndex()] = values[vertex];
+  }
+  return out;
+}
+
+std::vector<double> faceDataToVector(const gcs::FaceData<double>& values) {
+  std::vector<double> out(values.getMesh()->nFaces(), 0.0);
+  for (gcs::Face face : values.getMesh()->faces()) {
+    out[face.getIndex()] = values[face];
+  }
+  return out;
+}
+
+FaceHeatDirectionField faceVectorDataToVector(const gcs::FaceData<Vec3>& values) {
+  FaceHeatDirectionField out(values.getMesh()->nFaces(), Vec3::Zero());
+  for (gcs::Face face : values.getMesh()->faces()) {
+    out[face.getIndex()] = values[face];
+  }
+  return out;
+}
+
+ResultMesh makeSubdivisionResultMesh(gcs::CommonSubdivision& subdivision,
+                                     gcs::VertexPositionGeometry& inputGeometry) {
+  subdivision.constructMesh();
+  ResultMesh out;
+  out.domain = ResultDomain::Subdivision;
+  out.faces = meshFaces(*subdivision.mesh);
+  inputGeometry.requireVertexPositions();
+  out.vertices3D = toVec3Vector(subdivision.interpolateAcrossA(inputGeometry.vertexPositions));
+  inputGeometry.unrequireVertexPositions();
+  return out;
+}
+
 DrapeTrace makeTrace(const GeneratorTrace& generator, ResultDomain domain) {
   DrapeTrace trace;
   trace.hitBoundary = generator.hitBoundary;
@@ -387,11 +432,7 @@ std::vector<double> averageIntrinsicFaceScalarsToVertices(gcs::SurfaceMesh& mesh
 }
 
 std::vector<double> toVector(const gcs::VertexData<double>& values) {
-  std::vector<double> out(values.getMesh()->nVertices(), 0.0);
-  for (gcs::Vertex vertex : values.getMesh()->vertices()) {
-    out[vertex.getIndex()] = values[vertex];
-  }
-  return out;
+  return vertexDataToVector(values);
 }
 
 std::vector<double> restrictVertexScalarsToInput(gcs::IntrinsicTriangulation& triangulation,
@@ -404,6 +445,43 @@ std::vector<double> restrictVertexScalarsToInput(gcs::IntrinsicTriangulation& tr
     activeValues[vertex] = valuesOnIntrinsic[vertex.getIndex()];
   }
   return toVector(triangulation.restrictToInput(activeValues));
+}
+
+gcs::VertexData<double> activeVertexData(gcs::SurfaceMesh& mesh, const std::vector<double>& values) {
+  if (values.size() != mesh.nVertices()) {
+    throw std::runtime_error("activeVertexData requires one scalar per active vertex");
+  }
+  gcs::VertexData<double> data(mesh, 0.0);
+  for (gcs::Vertex vertex : mesh.vertices()) {
+    data[vertex] = values[vertex.getIndex()];
+  }
+  return data;
+}
+
+gcs::FaceData<double> activeFaceData(gcs::SurfaceMesh& mesh, const std::vector<double>& values) {
+  if (values.size() != mesh.nFaces()) {
+    throw std::runtime_error("activeFaceData requires one scalar per active face");
+  }
+  gcs::FaceData<double> data(mesh, 0.0);
+  for (gcs::Face face : mesh.faces()) {
+    data[face] = values[face.getIndex()];
+  }
+  return data;
+}
+
+gcs::FaceData<Vec3> activeFaceVectorData(gcs::SurfaceMesh& mesh, const FaceHeatDirectionField& values) {
+  if (values.size() != mesh.nFaces()) {
+    throw std::runtime_error("activeFaceVectorData requires one vector per active face");
+  }
+  Eigen::Matrix<Vec3, Eigen::Dynamic, 1> initial(static_cast<Eigen::Index>(mesh.nFaces()));
+  for (Eigen::Index i = 0; i < initial.rows(); ++i) {
+    initial[i] = Vec3::Zero();
+  }
+  gcs::FaceData<Vec3> data(mesh, initial);
+  for (gcs::Face face : mesh.faces()) {
+    data[face] = values[face.getIndex()];
+  }
+  return data;
 }
 
 } // namespace
@@ -638,9 +716,6 @@ CoreIntrinsicResult GeoDrapeSolver::solveCore(const IntrinsicSolveInput& input) 
 DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
                                              ResultDomain retrieval,
                                              bool sampleVertexShear) {
-  if (retrieval == ResultDomain::Subdivision) {
-    throw std::runtime_error("subdivision retrieval is not implemented yet");
-  }
   DrapeResult result;
   result.domain = retrieval;
   result.mode = core.mode;
@@ -656,6 +731,39 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
     if (sampleVertexShear && core.faceShearAnglesDegrees) {
       result.vertexShearAnglesDegrees =
           averageIntrinsicFaceScalarsToVertices(activeDomain_.mesh(), *core.faceShearAnglesDegrees);
+    }
+  } else if (retrieval == ResultDomain::Subdivision) {
+    gcs::CommonSubdivision& subdivision = activeDomain_.triangulation().getCommonSubdivision();
+    subdivision.constructMesh();
+    result.mesh = makeSubdivisionResultMesh(subdivision, *reference_.surface().geometry);
+    result.origin.extrinsicPoint = core.seed.cartesian;
+    result.origin.extrinsicFamilyDirections = {core.directions[0], core.directions[2]};
+    result.traces = makeTraceFamilies(core.generators, ResultDomain::Subdivision);
+
+    result.faceDirections = {
+        faceVectorDataToVector(subdivision.copyFromB(
+            activeFaceVectorData(activeDomain_.mesh(), core.faceDirections[0]))),
+        faceVectorDataToVector(subdivision.copyFromB(
+            activeFaceVectorData(activeDomain_.mesh(), core.faceDirections[1]))),
+    };
+    if (core.faceShearAnglesDegrees) {
+      result.faceShearAnglesDegrees = faceDataToVector(subdivision.copyFromB(
+          activeFaceData(activeDomain_.mesh(), *core.faceShearAnglesDegrees)));
+    }
+    if (core.distances) {
+      result.distances = std::array<std::vector<double>, 2>{
+          vertexDataToVector(subdivision.interpolateAcrossB(
+              activeVertexData(activeDomain_.mesh(), (*core.distances)[0]))),
+          vertexDataToVector(subdivision.interpolateAcrossB(
+              activeVertexData(activeDomain_.mesh(), (*core.distances)[1]))),
+      };
+    }
+    if (sampleVertexShear && core.faceShearAnglesDegrees) {
+      result.vertexShearAnglesDegrees =
+          averageFaceScalarsToVertices(
+              SurfaceMeshData{*result.mesh.vertices3D, result.mesh.faces},
+              *result.faceShearAnglesDegrees,
+              FaceScalarAveraging::FaceArea);
     }
   } else {
     result.mesh = makeExtrinsicResultMesh(reference_.meshData());

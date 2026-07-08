@@ -190,6 +190,40 @@ void testIntrinsicRetrieval(const std::filesystem::path& root) {
   assert(result.vertexShearAnglesDegrees);
 }
 
+void testSubdivisionRetrieval(const std::filesystem::path& root) {
+  const std::filesystem::path fixtureDir = root / "small_curved";
+  const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
+  const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
+  const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
+
+  geodesic_draping::RefinementOptions refinement;
+  refinement.mode = geodesic_draping::RefinementMode::DelaunayFlip;
+
+  geodesic_draping::DrapeSolveOptions options;
+  options.mode = geodesic_draping::DrapeSolveMode::Hybrid;
+  options.retrieval = geodesic_draping::ResultDomain::Subdivision;
+  options.sampleVertexShear = true;
+
+  geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions(), {}, refinement);
+  const auto result = solver.solve(seedXY, angleDegrees, options);
+  assert(result.domain == geodesic_draping::ResultDomain::Subdivision);
+  assert(result.mesh.domain == geodesic_draping::ResultDomain::Subdivision);
+  assert(result.mesh.vertices3D);
+  assert(!result.mesh.vertices3D->empty());
+  assert(!result.mesh.faces.empty());
+  assert(result.faceShearAnglesDegrees);
+  assert(result.faceShearAnglesDegrees->size() == result.mesh.faces.size());
+  assert(result.vertexShearAnglesDegrees);
+  assert(result.vertexShearAnglesDegrees->size() == result.mesh.vertices3D->size());
+  assert(result.distances);
+  assert((*result.distances)[0].size() == result.mesh.vertices3D->size());
+  assert(result.faceDirections[0].size() == result.mesh.faces.size());
+  assert(!result.traces[0].positive.extrinsicPoints.empty());
+  for (double value : *result.faceShearAnglesDegrees) {
+    assert(std::isfinite(value));
+  }
+}
+
 } // namespace
 
 int main() {
@@ -228,6 +262,7 @@ int main() {
   try {
     testRefinementSmoke(fixtureRoot);
     testIntrinsicRetrieval(fixtureRoot);
+    testSubdivisionRetrieval(fixtureRoot);
   } catch (const std::exception& e) {
     std::cerr << "architecture smoke failed: " << e.what() << "\n";
     return 1;
