@@ -78,7 +78,12 @@ gcs::IntrinsicGeometryInterface& requireGeometry(GeometryCentralSurface& surface
 
 CustomSignedHeatSolver::CustomSignedHeatSolver(GeometryCentralSurface& surface,
                                                double diffusionTimeCoefficient)
-    : mesh_(requireMesh(surface)), geometry_(requireGeometry(surface)) {
+    : CustomSignedHeatSolver(requireMesh(surface), requireGeometry(surface), diffusionTimeCoefficient) {}
+
+CustomSignedHeatSolver::CustomSignedHeatSolver(gcs::SurfaceMesh& mesh,
+                                               gcs::IntrinsicGeometryInterface& geometry,
+                                               double diffusionTimeCoefficient)
+    : mesh_(mesh), geometry_(geometry) {
   geometry_.requireEdgeLengths();
   geometry_.requireCrouzeixRaviartMassMatrix();
 

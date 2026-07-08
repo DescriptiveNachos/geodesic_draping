@@ -95,7 +95,10 @@ void testFixture(const std::filesystem::path& root,
     throw std::runtime_error(name + " sampled vertex shear does not match mesh");
   }
 
-  const auto fast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options);
+  geodesic_draping::DrapeSolveOptions fastOptions;
+  fastOptions.mode = geodesic_draping::DrapeSolveMode::Fast;
+  fastOptions.sampleVertexShear = false;
+  const auto fast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, fastOptions);
   if (fast.faceDirections[0].size() != surface.mesh->nFaces() ||
       fast.faceDirections[1].size() != surface.mesh->nFaces() ||
       !fast.faceShearAnglesDegrees ||
@@ -103,21 +106,23 @@ void testFixture(const std::filesystem::path& root,
     throw std::runtime_error(name + " high-level fast output sizes do not match mesh");
   }
   if (fast.distances) {
-    throw std::runtime_error(name + " default fast result should not return distances");
+    throw std::runtime_error(name + " explicit fast result should not return distances");
   }
   if (fast.vertexShearAnglesDegrees) {
-    throw std::runtime_error(name + " default fast result should not sample vertex shear");
+    throw std::runtime_error(name + " explicit fast result should not sample vertex shear");
   }
   requireNearArray(*fast.faceShearAnglesDegrees, faceShear, tolerance, name + " high-level face shear");
 
   geodesic_draping::DrapeSolveOptions sampledFastOptions;
-  sampledFastOptions.sampleSecondaryShear = true;
+  sampledFastOptions.mode = geodesic_draping::DrapeSolveMode::Fast;
+  sampledFastOptions.sampleVertexShear = true;
   const auto sampledFast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, sampledFastOptions);
   assert(sampledFast.vertexShearAnglesDegrees);
   requireNearArray(*sampledFast.vertexShearAnglesDegrees, vertexShear, tolerance, name + " sampled fast vertex shear");
 
   geodesic_draping::DrapeSolveOptions hybridOptions;
   hybridOptions.mode = geodesic_draping::DrapeSolveMode::Hybrid;
+  hybridOptions.sampleVertexShear = false;
   const auto hybrid = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, hybridOptions);
   geodesic_draping::DrapeSolveOptions completeOptions;
   completeOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
@@ -133,7 +138,7 @@ void testFixture(const std::filesystem::path& root,
                    *fast.faceShearAnglesDegrees,
                    tolerance,
                    name + " one-shot hybrid preserves face shear");
-  hybridOptions.sampleSecondaryShear = true;
+  hybridOptions.sampleVertexShear = true;
   const auto sampledHybrid = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, hybridOptions);
   assert(sampledHybrid.vertexShearAnglesDegrees);
   requireNearArray(*sampledHybrid.vertexShearAnglesDegrees,
@@ -156,7 +161,8 @@ void testFastFinite(const std::filesystem::path& root, const std::string& name) 
   const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
   const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
   geodesic_draping::DrapeSolveOptions options;
-  options.sampleSecondaryShear = true;
+  options.mode = geodesic_draping::DrapeSolveMode::Fast;
+  options.sampleVertexShear = true;
   const auto fast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions(), options);
 
   if (!fast.faceShearAnglesDegrees ||

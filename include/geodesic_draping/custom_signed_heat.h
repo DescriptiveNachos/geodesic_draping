@@ -32,6 +32,9 @@ struct CustomSignedHeatResult {
 class CustomSignedHeatSolver {
 public:
   CustomSignedHeatSolver(GeometryCentralSurface& surface, double diffusionTimeCoefficient = 1.0);
+  CustomSignedHeatSolver(geometrycentral::surface::SurfaceMesh& mesh,
+                         geometrycentral::surface::IntrinsicGeometryInterface& geometry,
+                         double diffusionTimeCoefficient = 1.0);
 
   DiffusedHeatFieldResult solveDiffusedEdgeHeatField(
       const std::vector<SurfaceReference>& sourceCurve,

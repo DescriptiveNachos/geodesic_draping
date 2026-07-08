@@ -59,7 +59,9 @@ void testFixtureSmoke(const std::filesystem::path& fixtureRoot) {
   geodesic_draping::DrapeSolveOptions completeOptions;
   completeOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
   const auto complete = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, completeOptions);
-  const auto fast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options);
+  geodesic_draping::DrapeSolveOptions fastOptions;
+  fastOptions.mode = geodesic_draping::DrapeSolveMode::Fast;
+  const auto fast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, fastOptions);
   assert(complete.gradients);
   const auto completeDiagnostics = geodesic_draping::analyzeGradientMagnitudes(*complete.gradients);
   auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);

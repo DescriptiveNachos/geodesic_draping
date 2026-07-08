@@ -4,7 +4,10 @@
 #include "geodesic_draping/generator_tracing.h"
 #include "geodesic_draping/custom_signed_heat.h"
 
+#include "geometrycentral/surface/intrinsic_triangulation.h"
+
 #include <array>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -16,9 +19,42 @@ enum class DrapeSolveMode {
   Complete,
 };
 
+enum class ResultDomain {
+  Intrinsic,
+  Extrinsic,
+  Subdivision,
+};
+
+enum class RefinementMode {
+  None,
+  DelaunayFlip,
+  DelaunayRefine,
+};
+
+struct IntrinsicConstructionOptions {};
+
+struct RefinementOptions {
+  RefinementMode mode = RefinementMode::None;
+  std::optional<double> angleThreshold;
+  std::optional<double> circumradiusThreshold;
+  std::optional<size_t> maxInsertions;
+};
+
+struct AdvancedTraceOptions {
+  std::optional<double> traceLength;
+  std::optional<size_t> maxIterations;
+};
+
+struct AdvancedSolveOptions {
+  AdvancedTraceOptions trace;
+};
+
 struct DrapeSolveOptions {
-  DrapeSolveMode mode = DrapeSolveMode::Fast;
+  DrapeSolveMode mode = DrapeSolveMode::Complete;
+  ResultDomain retrieval = ResultDomain::Extrinsic;
+  bool sampleVertexShear = true;
   bool sampleSecondaryShear = false;
+  AdvancedSolveOptions advanced;
 };
 
 struct DrapeResult {
@@ -35,20 +71,90 @@ struct DrapeResult {
   std::optional<std::vector<double>> vertexShearAnglesDegrees;
 };
 
-class GeoDrapeSolver {
+class ReferenceGeometry {
 public:
-  explicit GeoDrapeSolver(SurfaceMeshData meshData,
-                          const SignedHeatSolveOptions& heatOptions = {});
+  explicit ReferenceGeometry(SurfaceMeshData meshData);
 
-  DrapeResult solve(const Vec2& seedXY,
-                    double angleDegrees,
-                    const DrapeSolveOptions& solveOptions = {});
+  SurfaceMeshData& meshData();
+  const SurfaceMeshData& meshData() const;
+  GeometryCentralSurface& surface();
+  const GeometryCentralSurface& surface() const;
 
 private:
   SurfaceMeshData meshData_;
   GeometryCentralSurface surface_;
+};
+
+class ActiveIntrinsicDomain {
+public:
+  ActiveIntrinsicDomain(ReferenceGeometry& reference,
+                        const IntrinsicConstructionOptions& intrinsicOptions,
+                        const RefinementOptions& refinementOptions);
+
+  geometrycentral::surface::ManifoldSurfaceMesh& mesh();
+  geometrycentral::surface::IntrinsicGeometryInterface& geometry();
+  geometrycentral::surface::IntrinsicTriangulation& triangulation();
+
+private:
+  std::unique_ptr<geometrycentral::surface::IntrinsicTriangulation> triangulation_;
+};
+
+struct IntrinsicSolveInput {
+  BarycentricPoint seed;
+  std::array<Vec3, 4> directions;
+  DrapeSolveMode mode = DrapeSolveMode::Complete;
+  TraceSettings trace;
+};
+
+struct CoreIntrinsicResult {
+  DrapeSolveMode mode = DrapeSolveMode::Complete;
+  SeedProjection seed;
+  std::array<Vec3, 4> directions;
+  std::array<GeneratorTrace, 4> generators;
+  SourceCurves sourceCurves;
+  std::array<CustomSignedHeatResult, 2> customHeatSolves;
+  std::array<FaceHeatDirectionField, 2> faceDirections;
+  std::optional<std::array<std::vector<double>, 2>> distances;
+  std::optional<std::array<std::vector<Vec3>, 2>> gradients;
+  std::optional<std::vector<double>> faceShearAnglesDegrees;
+};
+
+class GeoDrapeSolver {
+public:
+  explicit GeoDrapeSolver(SurfaceMeshData meshData,
+                          const SignedHeatSolveOptions& heatOptions = {});
+  GeoDrapeSolver(SurfaceMeshData meshData,
+                 const SignedHeatSolveOptions& heatOptions,
+                 const IntrinsicConstructionOptions& intrinsicOptions,
+                 const RefinementOptions& refinementOptions = {});
+
+  DrapeResult solve(const Vec2& seedXY,
+                    double angleDegrees,
+                    const DrapeSolveOptions& solveOptions = {});
+  DrapeResult solve(const Vec2& seedXY,
+                    double fabricAngleDegrees,
+                    double fiberAngleDegrees,
+                    const DrapeSolveOptions& solveOptions = {});
+  DrapeResult retrieve(ResultDomain retrieval = ResultDomain::Extrinsic,
+                       bool sampleVertexShear = true);
+
+private:
+  IntrinsicSolveInput adaptExtrinsicInput(const Vec2& seedXY,
+                                          double fabricAngleDegrees,
+                                          double fiberAngleDegrees,
+                                          DrapeSolveMode mode,
+                                          const TraceSettings& trace);
+  CoreIntrinsicResult solveCore(const IntrinsicSolveInput& input);
+  DrapeResult retrieveFromCore(const CoreIntrinsicResult& core,
+                               ResultDomain retrieval,
+                               bool sampleVertexShear) const;
+
+  ReferenceGeometry reference_;
+  ActiveIntrinsicDomain activeDomain_;
+  TraceSettings traceDefaults_;
   SignedHeatSolveOptions heatOptions_;
-  CustomSignedHeatSolver customHeatSolver_;
+  std::unique_ptr<CustomSignedHeatSolver> customHeatSolver_;
+  std::optional<CoreIntrinsicResult> lastIntrinsicResult_;
 };
 
 DrapeResult solveDrape(const SurfaceMeshData& mesh,

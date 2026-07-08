@@ -210,7 +210,8 @@ int main(int argc, char** argv) {
     const geodesic_draping::DrapeResult result =
         geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, heatOptions, completeOptions);
     geodesic_draping::DrapeSolveOptions fastOptions;
-    fastOptions.sampleSecondaryShear = true;
+    fastOptions.mode = geodesic_draping::DrapeSolveMode::Fast;
+    fastOptions.sampleVertexShear = true;
     const geodesic_draping::DrapeResult fastResult =
         geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, heatOptions, fastOptions);
     if (!result.distances || !result.gradients || !result.vertexShearAnglesDegrees ||
