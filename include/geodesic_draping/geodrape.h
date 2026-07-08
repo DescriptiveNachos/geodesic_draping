@@ -59,8 +59,50 @@ struct DrapeSolveOptions {
   AdvancedSolveOptions advanced;
 };
 
+using GluingMapEntry = std::array<int, 2>;
+using FaceGluingMap = std::array<GluingMapEntry, 3>;
+
+struct ResultMesh {
+  ResultDomain domain = ResultDomain::Extrinsic;
+  std::vector<Face> faces;
+  std::optional<std::vector<Vec3>> vertices3D;
+  std::optional<std::vector<std::array<double, 3>>> edgeLengths;
+  std::optional<std::vector<FaceGluingMap>> gluingMap;
+};
+
+struct TangentVectorRef {
+  SurfaceReferenceType type = SurfaceReferenceType::Face;
+  size_t elementIndex = 0;
+  std::vector<double> coords;
+};
+
+struct DrapeOrigin {
+  std::optional<SurfaceReference> intrinsicPoint;
+  std::optional<Vec3> extrinsicPoint;
+  std::array<std::optional<TangentVectorRef>, 2> intrinsicFamilyDirections;
+  std::array<std::optional<Vec3>, 2> extrinsicFamilyDirections;
+};
+
+struct DrapeTrace {
+  std::vector<SurfaceReference> intrinsicPoints;
+  std::vector<Vec3> extrinsicPoints;
+  bool hitBoundary = false;
+  double length = 0.0;
+};
+
+struct TraceFamily {
+  DrapeTrace positive;
+  DrapeTrace negative;
+};
+
 struct DrapeResult {
+  ResultDomain domain = ResultDomain::Extrinsic;
   DrapeSolveMode mode = DrapeSolveMode::Fast;
+  ResultMesh mesh;
+  DrapeOrigin origin;
+  std::array<TraceFamily, 2> traces;
+
+  // Legacy/debug fields retained during the retrieval architecture migration.
   SeedProjection seed;
   std::array<Vec3, 4> directions;
   std::array<GeneratorTrace, 4> generators;
@@ -115,6 +157,8 @@ struct IntrinsicSolveInput {
 
 struct CoreIntrinsicResult {
   DrapeSolveMode mode = DrapeSolveMode::Complete;
+  SurfaceReference intrinsicSeed;
+  std::array<TangentVectorRef, 4> intrinsicDirections;
   SeedProjection seed;
   std::array<Vec3, 4> directions;
   std::array<GeneratorTrace, 4> generators;
@@ -154,7 +198,7 @@ private:
   CoreIntrinsicResult solveCore(const IntrinsicSolveInput& input);
   DrapeResult retrieveFromCore(const CoreIntrinsicResult& core,
                                ResultDomain retrieval,
-                               bool sampleVertexShear) const;
+                               bool sampleVertexShear);
 
   ReferenceGeometry reference_;
   ActiveIntrinsicDomain activeDomain_;

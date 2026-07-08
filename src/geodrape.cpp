@@ -266,6 +266,146 @@ FaceHeatDirectionField computeIntrinsicFaceScalarGradients(gcs::SurfaceMesh& mes
   return gradients;
 }
 
+TangentVectorRef toTangentVectorRef(const gcs::BarycentricVector& vector) {
+  const gcs::BarycentricVector faceVector = vector.inSomeFace();
+  TangentVectorRef ref;
+  ref.type = SurfaceReferenceType::Face;
+  ref.elementIndex = faceVector.face.getIndex();
+  ref.coords = {faceVector.faceCoords.x, faceVector.faceCoords.y, faceVector.faceCoords.z};
+  return ref;
+}
+
+std::vector<Face> meshFaces(gcs::SurfaceMesh& mesh) {
+  std::vector<Face> faces;
+  faces.reserve(mesh.nFaces());
+  for (gcs::Face face : mesh.faces()) {
+    Face out{};
+    size_t i = 0;
+    for (gcs::Vertex vertex : face.adjacentVertices()) {
+      out[i] = vertex.getIndex();
+      ++i;
+    }
+    faces.push_back(out);
+  }
+  return faces;
+}
+
+size_t localSideIndex(gcs::Halfedge target) {
+  size_t side = 0;
+  for (gcs::Halfedge halfedge : target.face().adjacentHalfedges()) {
+    if (halfedge == target) {
+      return side;
+    }
+    ++side;
+  }
+  throw std::runtime_error("halfedge is not incident on its face");
+}
+
+ResultMesh makeExtrinsicResultMesh(const SurfaceMeshData& meshData) {
+  ResultMesh mesh;
+  mesh.domain = ResultDomain::Extrinsic;
+  mesh.faces = meshData.faces;
+  mesh.vertices3D = meshData.vertices;
+  return mesh;
+}
+
+ResultMesh makeIntrinsicResultMesh(gcs::SurfaceMesh& mesh,
+                                   gcs::IntrinsicGeometryInterface& geometry) {
+  ResultMesh out;
+  out.domain = ResultDomain::Intrinsic;
+  out.faces = meshFaces(mesh);
+  out.edgeLengths = std::vector<std::array<double, 3>>{};
+  out.gluingMap = std::vector<FaceGluingMap>{};
+  out.edgeLengths->reserve(mesh.nFaces());
+  out.gluingMap->reserve(mesh.nFaces());
+
+  geometry.requireEdgeLengths();
+  for (gcs::Face face : mesh.faces()) {
+    std::array<double, 3> lengths{};
+    FaceGluingMap gluing{};
+    size_t side = 0;
+    for (gcs::Halfedge halfedge : face.adjacentHalfedges()) {
+      lengths[side] = geometry.edgeLengths[halfedge.edge()];
+      if (halfedge.twin().isInterior()) {
+        const gcs::Halfedge twin = halfedge.twin();
+        gluing[side] = {
+            static_cast<int>(twin.face().getIndex()),
+            static_cast<int>(localSideIndex(twin)),
+        };
+      } else {
+        gluing[side] = {-1, -1};
+      }
+      ++side;
+    }
+    out.edgeLengths->push_back(lengths);
+    out.gluingMap->push_back(gluing);
+  }
+  geometry.unrequireEdgeLengths();
+  return out;
+}
+
+DrapeTrace makeTrace(const GeneratorTrace& generator, ResultDomain domain) {
+  DrapeTrace trace;
+  trace.hitBoundary = generator.hitBoundary;
+  trace.length = generator.length;
+  if (domain == ResultDomain::Intrinsic) {
+    trace.intrinsicPoints = generator.surfaceReferences;
+  } else {
+    trace.extrinsicPoints = generator.points;
+  }
+  return trace;
+}
+
+std::array<TraceFamily, 2> makeTraceFamilies(const std::array<GeneratorTrace, 4>& generators,
+                                             ResultDomain domain) {
+  return {
+      TraceFamily{makeTrace(generators[0], domain), makeTrace(generators[1], domain)},
+      TraceFamily{makeTrace(generators[2], domain), makeTrace(generators[3], domain)},
+  };
+}
+
+std::vector<double> averageIntrinsicFaceScalarsToVertices(gcs::SurfaceMesh& mesh,
+                                                          const std::vector<double>& faceScalars) {
+  if (faceScalars.size() != mesh.nFaces()) {
+    throw std::runtime_error("averageIntrinsicFaceScalarsToVertices requires one scalar per active face");
+  }
+
+  std::vector<double> accumulated(mesh.nVertices(), 0.0);
+  std::vector<double> counts(mesh.nVertices(), 0.0);
+  for (gcs::Face face : mesh.faces()) {
+    for (gcs::Vertex vertex : face.adjacentVertices()) {
+      accumulated[vertex.getIndex()] += faceScalars[face.getIndex()];
+      counts[vertex.getIndex()] += 1.0;
+    }
+  }
+  for (size_t i = 0; i < accumulated.size(); ++i) {
+    if (counts[i] > 0.0) {
+      accumulated[i] /= counts[i];
+    }
+  }
+  return accumulated;
+}
+
+std::vector<double> toVector(const gcs::VertexData<double>& values) {
+  std::vector<double> out(values.getMesh()->nVertices(), 0.0);
+  for (gcs::Vertex vertex : values.getMesh()->vertices()) {
+    out[vertex.getIndex()] = values[vertex];
+  }
+  return out;
+}
+
+std::vector<double> restrictVertexScalarsToInput(gcs::IntrinsicTriangulation& triangulation,
+                                                 const std::vector<double>& valuesOnIntrinsic) {
+  if (valuesOnIntrinsic.size() != triangulation.intrinsicMesh->nVertices()) {
+    throw std::runtime_error("restrictVertexScalarsToInput requires one scalar per active intrinsic vertex");
+  }
+  gcs::VertexData<double> activeValues(*triangulation.intrinsicMesh, 0.0);
+  for (gcs::Vertex vertex : triangulation.intrinsicMesh->vertices()) {
+    activeValues[vertex] = valuesOnIntrinsic[vertex.getIndex()];
+  }
+  return toVector(triangulation.restrictToInput(activeValues));
+}
+
 } // namespace
 
 ReferenceGeometry::ReferenceGeometry(SurfaceMeshData meshData)
@@ -417,6 +557,13 @@ IntrinsicSolveInput GeoDrapeSolver::adaptExtrinsicInput(const Vec2& seedXY,
 CoreIntrinsicResult GeoDrapeSolver::solveCore(const IntrinsicSolveInput& input) {
   CoreIntrinsicResult result;
   result.mode = input.mode;
+  result.intrinsicSeed = toSurfaceReference(input.seed);
+  result.intrinsicDirections = {
+      toTangentVectorRef(input.directions[0]),
+      toTangentVectorRef(input.directions[1]),
+      toTangentVectorRef(input.directions[2]),
+      toTangentVectorRef(input.directions[3]),
+  };
   result.directions = input.cartesianDirections;
   const gcs::SurfacePoint inputSeed = activeDomain_.intrinsicToInput(input.seed).inSomeFace();
   result.seed.surfacePoint.faceIndex = inputSeed.face.getIndex();
@@ -490,34 +637,63 @@ CoreIntrinsicResult GeoDrapeSolver::solveCore(const IntrinsicSolveInput& input) 
 
 DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
                                              ResultDomain retrieval,
-                                             bool sampleVertexShear) const {
-  if (retrieval != ResultDomain::Extrinsic) {
-    throw std::runtime_error("only extrinsic retrieval is implemented in this architecture checkpoint");
+                                             bool sampleVertexShear) {
+  if (retrieval == ResultDomain::Subdivision) {
+    throw std::runtime_error("subdivision retrieval is not implemented yet");
   }
-
   DrapeResult result;
+  result.domain = retrieval;
   result.mode = core.mode;
-  result.seed = core.seed;
-  result.directions = core.directions;
-  result.generators = core.generators;
-  result.sourceCurves = core.sourceCurves;
-  result.customHeatSolves = core.customHeatSolves;
-  result.faceDirections = core.faceDirections;
-  result.distances = core.distances;
-  result.gradients = core.gradients;
 
-  if (core.mode == DrapeSolveMode::Complete) {
-    if (core.gradients) {
+  if (retrieval == ResultDomain::Intrinsic) {
+    result.mesh = makeIntrinsicResultMesh(activeDomain_.mesh(), activeDomain_.geometry());
+    result.origin.intrinsicPoint = core.intrinsicSeed;
+    result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
+    result.traces = makeTraceFamilies(core.generators, ResultDomain::Intrinsic);
+    result.faceDirections = core.faceDirections;
+    result.faceShearAnglesDegrees = core.faceShearAnglesDegrees;
+    result.distances = core.distances;
+    if (sampleVertexShear && core.faceShearAnglesDegrees) {
       result.vertexShearAnglesDegrees =
-          computeShearAnglesDegrees((*core.gradients)[0], (*core.gradients)[1]);
+          averageIntrinsicFaceScalarsToVertices(activeDomain_.mesh(), *core.faceShearAnglesDegrees);
     }
   } else {
-    result.faceShearAnglesDegrees = core.faceShearAnglesDegrees;
-    if (sampleVertexShear && core.faceShearAnglesDegrees) {
-      result.vertexShearAnglesDegrees = averageFaceScalarsToVertices(
-          reference_.meshData(),
-          *core.faceShearAnglesDegrees,
-          FaceScalarAveraging::FaceArea);
+    result.mesh = makeExtrinsicResultMesh(reference_.meshData());
+    result.origin.extrinsicPoint = core.seed.cartesian;
+    result.origin.extrinsicFamilyDirections = {core.directions[0], core.directions[2]};
+    result.traces = makeTraceFamilies(core.generators, ResultDomain::Extrinsic);
+    result.seed = core.seed;
+    result.directions = core.directions;
+    result.generators = core.generators;
+    result.sourceCurves = core.sourceCurves;
+    result.customHeatSolves = core.customHeatSolves;
+    result.faceDirections = core.faceDirections;
+    result.gradients = core.gradients;
+
+    if (core.distances) {
+      if ((*core.distances)[0].size() == reference_.meshData().vertices.size()) {
+        result.distances = core.distances;
+      } else {
+        result.distances = std::array<std::vector<double>, 2>{
+            restrictVertexScalarsToInput(activeDomain_.triangulation(), (*core.distances)[0]),
+            restrictVertexScalarsToInput(activeDomain_.triangulation(), (*core.distances)[1]),
+        };
+      }
+    }
+
+    if (core.mode == DrapeSolveMode::Complete) {
+      if (core.gradients) {
+        result.vertexShearAnglesDegrees =
+            computeShearAnglesDegrees((*core.gradients)[0], (*core.gradients)[1]);
+      }
+    } else {
+      result.faceShearAnglesDegrees = core.faceShearAnglesDegrees;
+      if (sampleVertexShear && core.faceShearAnglesDegrees) {
+        result.vertexShearAnglesDegrees = averageFaceScalarsToVertices(
+            reference_.meshData(),
+            *core.faceShearAnglesDegrees,
+            FaceScalarAveraging::FaceArea);
+      }
     }
   }
 

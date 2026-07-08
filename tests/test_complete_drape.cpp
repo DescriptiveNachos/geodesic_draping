@@ -160,6 +160,36 @@ void testRefinementSmoke(const std::filesystem::path& root) {
   requireFiniteFaceShear(refineSolver.solve(seedXY, angleDegrees, options), "delaunay refine smoke");
 }
 
+void testIntrinsicRetrieval(const std::filesystem::path& root) {
+  const std::filesystem::path fixtureDir = root / "small_curved";
+  const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
+  const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
+  const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
+
+  geodesic_draping::DrapeSolveOptions options;
+  options.mode = geodesic_draping::DrapeSolveMode::Hybrid;
+  options.retrieval = geodesic_draping::ResultDomain::Intrinsic;
+  options.sampleVertexShear = true;
+
+  geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions());
+  const auto result = solver.solve(seedXY, angleDegrees, options);
+  assert(result.domain == geodesic_draping::ResultDomain::Intrinsic);
+  assert(result.mesh.domain == geodesic_draping::ResultDomain::Intrinsic);
+  assert(!result.mesh.vertices3D);
+  assert(result.mesh.edgeLengths);
+  assert(result.mesh.gluingMap);
+  assert(result.mesh.faces.size() == result.mesh.edgeLengths->size());
+  assert(result.mesh.faces.size() == result.mesh.gluingMap->size());
+  assert(result.origin.intrinsicPoint);
+  assert(result.origin.intrinsicFamilyDirections[0]);
+  assert(result.origin.intrinsicFamilyDirections[1]);
+  assert(!result.traces[0].positive.intrinsicPoints.empty());
+  assert(!result.traces[0].negative.intrinsicPoints.empty());
+  assert(result.distances);
+  assert(result.faceShearAnglesDegrees);
+  assert(result.vertexShearAnglesDegrees);
+}
+
 } // namespace
 
 int main() {
@@ -197,8 +227,9 @@ int main() {
   testOneShotComplete(fixtureRoot, "tiny_planar");
   try {
     testRefinementSmoke(fixtureRoot);
+    testIntrinsicRetrieval(fixtureRoot);
   } catch (const std::exception& e) {
-    std::cerr << "refinement smoke failed: " << e.what() << "\n";
+    std::cerr << "architecture smoke failed: " << e.what() << "\n";
     return 1;
   }
 
