@@ -34,7 +34,14 @@ enum class RefinementMode {
   DelaunayRefine,
 };
 
-struct IntrinsicConstructionOptions {};
+enum class IntrinsicTriangulationBackend {
+  Signpost,
+  IntegerCoordinates,
+};
+
+struct IntrinsicConstructionOptions {
+  IntrinsicTriangulationBackend backend = IntrinsicTriangulationBackend::Signpost;
+};
 
 struct RefinementOptions {
   RefinementMode mode = RefinementMode::None;
@@ -139,6 +146,7 @@ public:
 
 private:
   std::unique_ptr<geometrycentral::surface::IntrinsicTriangulation> triangulation_;
+  bool useCommonSubdivisionInputAdapter_ = false;
 };
 
 struct IntrinsicSolveInput {

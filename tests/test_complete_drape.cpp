@@ -273,6 +273,26 @@ void testSubdivisionRetrieval(const std::filesystem::path& root) {
   }
 }
 
+void testIntegerBackendRefinedSubdivision(const std::filesystem::path& root) {
+  const std::filesystem::path fixtureDir = root / "demo_part";
+  const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
+
+  geodesic_draping::IntrinsicConstructionOptions intrinsic;
+  intrinsic.backend = geodesic_draping::IntrinsicTriangulationBackend::IntegerCoordinates;
+
+  geodesic_draping::RefinementOptions refinement;
+  refinement.mode = geodesic_draping::RefinementMode::DelaunayRefine;
+  refinement.angleThreshold = 25.0;
+
+  geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions(), intrinsic, refinement);
+  const geodesic_draping::CommonSubdivisionDebugInfo debug =
+      solver.debugCommonSubdivision(true);
+  assert(debug.attemptedMeshConstruction);
+  assert(debug.meshConstructed);
+  assert(debug.faceVertexCount > 0);
+  assert(debug.constructedVertexCount > mesh.vertices.size());
+}
+
 } // namespace
 
 int main() {
@@ -313,6 +333,7 @@ int main() {
     testRefinementSmoke(fixtureRoot);
     testIntrinsicRetrieval(fixtureRoot);
     testSubdivisionRetrieval(fixtureRoot);
+    testIntegerBackendRefinedSubdivision(fixtureRoot);
   } catch (const std::exception& e) {
     std::cerr << "architecture smoke failed: " << e.what() << "\n";
     return 1;

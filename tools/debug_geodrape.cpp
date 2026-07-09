@@ -28,7 +28,8 @@ void printUsage(const char* argv0) {
   std::cout << "Usage:\n"
             << "  " << argv0
             << " [fixture-name] [--no-show] [--direction-length value]\n"
-            << "    [--quality-thresholds path] [--refinement none|flip|refine]\n"
+            << "    [--quality-thresholds path] [--backend signpost|integer]\n"
+            << "    [--refinement none|flip|refine]\n"
             << "    [--angle-threshold value] [--circumradius-threshold value]\n"
             << "    [--subdivision-debug] [--subdivision-debug-only]\n\n"
             << "Fixtures are loaded from " << GEODESIC_DRAPING_TEST_DATA_DIR << "\n"
@@ -48,6 +49,16 @@ geodesic_draping::RefinementMode parseRefinementMode(const std::string& value) {
   throw std::runtime_error("--refinement must be one of: none, flip, refine");
 }
 
+geodesic_draping::IntrinsicTriangulationBackend parseBackend(const std::string& value) {
+  if (value == "signpost") {
+    return geodesic_draping::IntrinsicTriangulationBackend::Signpost;
+  }
+  if (value == "integer" || value == "integer-coordinates") {
+    return geodesic_draping::IntrinsicTriangulationBackend::IntegerCoordinates;
+  }
+  throw std::runtime_error("--backend must be one of: signpost, integer");
+}
+
 std::string refinementModeName(geodesic_draping::RefinementMode mode) {
   switch (mode) {
   case geodesic_draping::RefinementMode::None:
@@ -56,6 +67,16 @@ std::string refinementModeName(geodesic_draping::RefinementMode mode) {
     return "flip";
   case geodesic_draping::RefinementMode::DelaunayRefine:
     return "refine";
+  }
+  return "unknown";
+}
+
+std::string backendName(geodesic_draping::IntrinsicTriangulationBackend backend) {
+  switch (backend) {
+  case geodesic_draping::IntrinsicTriangulationBackend::Signpost:
+    return "signpost";
+  case geodesic_draping::IntrinsicTriangulationBackend::IntegerCoordinates:
+    return "integer";
   }
   return "unknown";
 }
@@ -237,6 +258,7 @@ int main(int argc, char** argv) {
     bool show = true;
     double directionLength = 25.0;
     geodesic_draping::SolveQualityThresholds qualityThresholds;
+    geodesic_draping::IntrinsicConstructionOptions intrinsicOptions;
     geodesic_draping::RefinementOptions refinementOptions;
     bool subdivisionDebug = false;
     bool subdivisionDebugOnly = false;
@@ -263,6 +285,13 @@ int main(int argc, char** argv) {
           throw std::runtime_error("--quality-thresholds requires a path");
         }
         qualityThresholds = geodesic_draping::loadSolveQualityThresholds(argv[++i], qualityThresholds);
+        continue;
+      }
+      if (arg == "--backend") {
+        if (i + 1 >= argc) {
+          throw std::runtime_error("--backend requires one of: signpost, integer");
+        }
+        intrinsicOptions.backend = parseBackend(argv[++i]);
         continue;
       }
       if (arg == "--refinement") {
@@ -313,7 +342,7 @@ int main(int argc, char** argv) {
     const geodesic_draping::ResultDomain fieldRetrieval =
         useSubdivisionRetrieval ? geodesic_draping::ResultDomain::Subdivision
                                 : geodesic_draping::ResultDomain::Intrinsic;
-    geodesic_draping::GeoDrapeSolver solver(mesh, heatOptions, {}, refinementOptions);
+    geodesic_draping::GeoDrapeSolver solver(mesh, heatOptions, intrinsicOptions, refinementOptions);
     if (subdivisionDebug) {
       printSubdivisionDebugInfo(solver.debugCommonSubdivision(subdivisionDebugOnly));
       if (subdivisionDebugOnly) {
@@ -360,6 +389,7 @@ int main(int argc, char** argv) {
     std::cout << "Fixture: " << fixtureName << "\n"
               << "Vertices: " << mesh.vertices.size() << "  Faces: " << mesh.faces.size() << "\n"
               << "Seed XY: [" << seedXY.transpose() << "]  Angle degrees: " << angleDegrees << "\n"
+              << "Backend: " << backendName(intrinsicOptions.backend) << "\n"
               << "Refinement: " << refinementModeName(refinementOptions.mode);
     if (refinementOptions.angleThreshold) {
       std::cout << "  angle_threshold " << *refinementOptions.angleThreshold;
