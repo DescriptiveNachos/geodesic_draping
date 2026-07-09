@@ -2,6 +2,8 @@
 #include "geodesic_draping/geometrycentral_adapter.h"
 
 #include "geometrycentral/surface/common_subdivision.h"
+#include "geometrycentral/surface/integer_coordinates_intrinsic_triangulation.h"
+#include "geometrycentral/surface/intrinsic_triangulation.h"
 #include "geometrycentral/surface/signpost_intrinsic_triangulation.h"
 
 #include <algorithm>
@@ -10,6 +12,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -22,8 +25,14 @@ enum class RefinementMode {
   Refine,
 };
 
+enum class TriangulationBackend {
+  Signpost,
+  IntegerCoordinates,
+};
+
 struct Options {
   std::string fixtureName = "demo_part";
+  TriangulationBackend backend = TriangulationBackend::Signpost;
   RefinementMode refinement = RefinementMode::None;
   std::optional<double> angleThreshold;
   std::optional<double> circumradiusThreshold;
@@ -42,7 +51,7 @@ struct CountStats {
 void printUsage(const char* argv0) {
   std::cout << "Usage:\n"
             << "  " << argv0
-            << " [fixture-name] [--refinement none|flip|refine]\n"
+            << " [fixture-name] [--backend signpost|integer] [--refinement none|flip|refine]\n"
             << "    [--angle-threshold value] [--circumradius-threshold value]\n"
             << "    [--max-insertions value] [--write-obj prefix]\n\n"
             << "Default fixture: demo_part\n"
@@ -62,6 +71,16 @@ RefinementMode parseRefinementMode(const std::string& value) {
   throw std::runtime_error("--refinement must be one of: none, flip, refine");
 }
 
+TriangulationBackend parseBackend(const std::string& value) {
+  if (value == "signpost") {
+    return TriangulationBackend::Signpost;
+  }
+  if (value == "integer" || value == "integer-coordinates") {
+    return TriangulationBackend::IntegerCoordinates;
+  }
+  throw std::runtime_error("--backend must be one of: signpost, integer");
+}
+
 std::string refinementModeName(RefinementMode mode) {
   switch (mode) {
   case RefinementMode::None:
@@ -74,6 +93,16 @@ std::string refinementModeName(RefinementMode mode) {
   return "unknown";
 }
 
+std::string backendName(TriangulationBackend backend) {
+  switch (backend) {
+  case TriangulationBackend::Signpost:
+    return "signpost";
+  case TriangulationBackend::IntegerCoordinates:
+    return "integer";
+  }
+  return "unknown";
+}
+
 Options parseOptions(int argc, char** argv) {
   Options options;
   for (int i = 1; i < argc; ++i) {
@@ -81,6 +110,13 @@ Options parseOptions(int argc, char** argv) {
     if (arg == "--help" || arg == "-h") {
       printUsage(argv[0]);
       std::exit(0);
+    }
+    if (arg == "--backend") {
+      if (i + 1 >= argc) {
+        throw std::runtime_error("--backend requires a value");
+      }
+      options.backend = parseBackend(argv[++i]);
+      continue;
     }
     if (arg == "--refinement") {
       if (i + 1 >= argc) {
@@ -124,6 +160,18 @@ Options parseOptions(int argc, char** argv) {
     throw std::runtime_error("refinement thresholds are only valid with --refinement refine");
   }
   return options;
+}
+
+std::unique_ptr<geometrycentral::surface::IntrinsicTriangulation> makeTriangulation(
+    TriangulationBackend backend,
+    geometrycentral::surface::ManifoldSurfaceMesh& mesh,
+    geometrycentral::surface::IntrinsicGeometryInterface& geometry) {
+  if (backend == TriangulationBackend::Signpost) {
+    return std::make_unique<geometrycentral::surface::SignpostIntrinsicTriangulation>(
+        mesh, geometry);
+  }
+  return std::make_unique<geometrycentral::surface::IntegerCoordinatesIntrinsicTriangulation>(
+      mesh, geometry);
 }
 
 CountStats scalarStats(const std::vector<double>& values) {
@@ -257,6 +305,7 @@ int main(int argc, char** argv) {
               << surface.mesh->nEdges() << "/"
               << surface.mesh->nFaces()
               << "  boundary_edges " << countBoundaryEdges(*surface.mesh) << "\n"
+              << "backend " << backendName(options.backend) << "\n"
               << "refinement " << refinementModeName(options.refinement);
     if (options.angleThreshold) {
       std::cout << "  angle_threshold " << *options.angleThreshold;
@@ -269,28 +318,28 @@ int main(int argc, char** argv) {
     }
     std::cout << "\n";
 
-    geometrycentral::surface::SignpostIntrinsicTriangulation triangulation(
-        *surface.mesh, *surface.geometry);
+    std::unique_ptr<geometrycentral::surface::IntrinsicTriangulation> triangulation =
+        makeTriangulation(options.backend, *surface.mesh, *surface.geometry);
 
     if (options.refinement == RefinementMode::Flip) {
-      triangulation.flipToDelaunay();
+      triangulation->flipToDelaunay();
     } else if (options.refinement == RefinementMode::Refine) {
       const double angleThreshold = options.angleThreshold.value_or(25.0);
       const double circumradiusThreshold =
           options.circumradiusThreshold.value_or(std::numeric_limits<double>::infinity());
       const size_t maxInsertions =
           options.maxInsertions.value_or(geometrycentral::INVALID_IND);
-      triangulation.delaunayRefine(angleThreshold, circumradiusThreshold, maxInsertions);
+      triangulation->delaunayRefine(angleThreshold, circumradiusThreshold, maxInsertions);
     }
 
     std::cout << "intrinsic mesh V/E/F "
-              << triangulation.intrinsicMesh->nVertices() << "/"
-              << triangulation.intrinsicMesh->nEdges() << "/"
-              << triangulation.intrinsicMesh->nFaces()
-              << "  boundary_edges " << countBoundaryEdges(*triangulation.intrinsicMesh) << "\n";
+              << triangulation->intrinsicMesh->nVertices() << "/"
+              << triangulation->intrinsicMesh->nEdges() << "/"
+              << triangulation->intrinsicMesh->nFaces()
+              << "  boundary_edges " << countBoundaryEdges(*triangulation->intrinsicMesh) << "\n";
 
     geometrycentral::surface::CommonSubdivision& subdivision =
-        triangulation.getCommonSubdivision();
+        triangulation->getCommonSubdivision();
     printSubdivisionPointTypeCounts(subdivision);
     const auto [expectedV, expectedE, expectedF] = subdivision.elementCounts();
     std::cout << "  expected constructed V/E/F "
@@ -349,7 +398,7 @@ int main(int argc, char** argv) {
       printStats("normal_norm", scalarStats(normalNorms));
 
       geometrycentral::surface::FaceData<double> intrinsicColors =
-          geometrycentral::surface::niceColors(*triangulation.intrinsicMesh);
+          geometrycentral::surface::niceColors(*triangulation->intrinsicMesh);
       geometrycentral::surface::FaceData<double> subdivisionColors =
           subdivision.copyFromB(intrinsicColors);
       std::vector<double> colors;
