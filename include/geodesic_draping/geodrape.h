@@ -151,7 +151,6 @@ struct CoreIntrinsicResult {
   DrapeSolveMode mode = DrapeSolveMode::Complete;
   SurfaceReference intrinsicSeed;
   std::array<TangentVectorRef, 4> intrinsicDirections;
-  SeedProjection extrinsicSeed;
   std::array<Vec3, 4> cartesianDirections;
   std::array<GeneratorTrace, 4> generators;
   std::array<FaceHeatDirectionField, 2> directions;

@@ -79,6 +79,22 @@ gcs::SurfacePoint toFaceSurfacePoint(gcs::SurfaceMesh& mesh, const BarycentricPo
       });
 }
 
+SeedProjection toExtrinsicSeed(ReferenceGeometry& reference,
+                               ActiveIntrinsicDomain& activeDomain,
+                               const SurfaceReference& intrinsicSeed) {
+  const gcs::SurfacePoint intrinsicPoint =
+      toGeometryCentralSurfacePoint(activeDomain.mesh(), intrinsicSeed);
+  const gcs::SurfacePoint inputPoint =
+      activeDomain.intrinsicToInput(intrinsicPoint).inSomeFace();
+
+  SeedProjection seed;
+  seed.surfacePoint.faceIndex = inputPoint.face.getIndex();
+  seed.surfacePoint.barycentric =
+      Vec3(inputPoint.faceCoords.x, inputPoint.faceCoords.y, inputPoint.faceCoords.z);
+  seed.cartesian = interpolateSurfacePoint(inputPoint, *reference.surface().geometry);
+  return seed;
+}
+
 gcs::BarycentricVector normalizeVector(gcs::BarycentricVector vector,
                                        gcs::IntrinsicGeometryInterface& geometry) {
   const double magnitude = vector.norm(geometry);
@@ -709,16 +725,6 @@ CoreIntrinsicResult GeoDrapeSolver::solveCore(const IntrinsicSolveInput& input) 
       toTangentVectorRef(input.directions[3]),
   };
   result.cartesianDirections = input.cartesianDirections;
-  const gcs::SurfacePoint inputSeed = activeDomain_.intrinsicToInput(input.seed).inSomeFace();
-  result.extrinsicSeed.surfacePoint.faceIndex = inputSeed.face.getIndex();
-  result.extrinsicSeed.surfacePoint.barycentric =
-      Vec3(inputSeed.faceCoords.x, inputSeed.faceCoords.y, inputSeed.faceCoords.z);
-
-  const Face& face = reference_.meshData().faces.at(result.extrinsicSeed.surfacePoint.faceIndex);
-  result.extrinsicSeed.cartesian =
-      result.extrinsicSeed.surfacePoint.barycentric(0) * reference_.meshData().vertices[face[0]] +
-      result.extrinsicSeed.surfacePoint.barycentric(1) * reference_.meshData().vertices[face[1]] +
-      result.extrinsicSeed.surfacePoint.barycentric(2) * reference_.meshData().vertices[face[2]];
 
   result.generators = traceActiveGenerators(
       reference_,
@@ -773,6 +779,12 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
   DrapeResult result;
   result.domain = retrieval;
   result.mode = core.mode;
+  const bool needsExtrinsicOrigin =
+      retrieval == ResultDomain::Extrinsic || retrieval == ResultDomain::Subdivision;
+  const std::optional<SeedProjection> extrinsicSeed =
+      needsExtrinsicOrigin
+          ? std::optional<SeedProjection>{toExtrinsicSeed(reference_, activeDomain_, core.intrinsicSeed)}
+          : std::nullopt;
 
   if (retrieval == ResultDomain::Intrinsic) {
     result.mesh = makeIntrinsicResultMesh(activeDomain_.mesh(), activeDomain_.geometry());
@@ -792,7 +804,7 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
     result.mesh = makeSubdivisionResultMesh(subdivision, *reference_.surface().geometry);
     result.origin.intrinsicPoint = core.intrinsicSeed;
     result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
-    result.origin.extrinsicPoint = core.extrinsicSeed.cartesian;
+    result.origin.extrinsicPoint = extrinsicSeed->cartesian;
     result.origin.extrinsicFamilyDirections = {core.cartesianDirections[0], core.cartesianDirections[2]};
     result.traces = makeTraceFamilies(core.generators, ResultDomain::Subdivision);
 
@@ -825,7 +837,7 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
     result.mesh = makeExtrinsicResultMesh(reference_.meshData());
     result.origin.intrinsicPoint = core.intrinsicSeed;
     result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
-    result.origin.extrinsicPoint = core.extrinsicSeed.cartesian;
+    result.origin.extrinsicPoint = extrinsicSeed->cartesian;
     result.origin.extrinsicFamilyDirections = {core.cartesianDirections[0], core.cartesianDirections[2]};
     result.traces = makeTraceFamilies(core.generators, ResultDomain::Extrinsic);
 
