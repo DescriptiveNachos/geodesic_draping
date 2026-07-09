@@ -238,6 +238,7 @@ void plotGeneratorTraces(const std::array<GeneratorTrace, 4>& traces,
 void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
                                const DrapeResult& completeResult,
                                const DrapeResult& fastResult,
+                               const DrapeResult& overlayResult,
                                const ProjectionPlotOptions& options) {
 #if GEODESIC_DRAPING_HAS_POLYSCOPE
   if (!completeResult.distances || !completeResult.vertexShear) {
@@ -298,7 +299,7 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
       "fast vertex shear_degrees", *fastResult.vertexShear);
   applyDrapeComparisonDisplay(*quantities);
 
-  registerOriginDirectionsAndTraces(options.name, completeResult, options.directionLength);
+  registerOriginDirectionsAndTraces(options.name, overlayResult, options.directionLength);
 
   polyscope::state::userCallback = [quantities]() {
     bool changed = false;
@@ -332,6 +333,7 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
   (void)mesh;
   (void)completeResult;
   (void)fastResult;
+  (void)overlayResult;
   (void)options;
   throw std::runtime_error(
       "Polyscope plotting is disabled. Reconfigure with GEODESIC_DRAPING_ENABLE_POLYSCOPE=ON.");

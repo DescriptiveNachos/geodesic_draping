@@ -333,7 +333,7 @@ int main(int argc, char** argv) {
     options.directionLength = directionLength;
     options.clearExisting = true;
     options.show = show;
-    geodesic_draping::plotDrapeComparisonResult(mesh, completeFieldResult, fastResult, options);
+    geodesic_draping::plotDrapeComparisonResult(mesh, completeFieldResult, fastResult, result, options);
 
     if (!show) {
       std::cout << "\nPlot data registered with Polyscope, but --no-show was set.\n";
