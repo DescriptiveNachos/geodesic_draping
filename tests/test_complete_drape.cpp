@@ -39,6 +39,23 @@ void requireNearArray(const std::vector<double>& actual,
   }
 }
 
+double maxAbsDiff(const geodesic_draping::Vec3& a, const geodesic_draping::Vec3& b) {
+  return (a - b).cwiseAbs().maxCoeff();
+}
+
+void requireNearVector(const geodesic_draping::Vec3& actual,
+                       const geodesic_draping::Vec3& expected,
+                       double tolerance,
+                       const std::string& label) {
+  const double diff = maxAbsDiff(actual, expected);
+  if (diff > tolerance) {
+    std::cerr << label << " max diff " << diff << " exceeds tolerance " << tolerance << "\n"
+              << "actual:   " << actual.transpose() << "\n"
+              << "expected: " << expected.transpose() << "\n";
+    throw std::runtime_error(label + " exceeded tolerance");
+  }
+}
+
 void requireFiniteComplete(const geodesic_draping::DrapeResult& result, size_t nVertices) {
   assert(result.mode == geodesic_draping::DrapeSolveMode::Complete);
   assert(result.distances);
@@ -52,6 +69,46 @@ void requireFiniteComplete(const geodesic_draping::DrapeResult& result, size_t n
   assert(result.vertexShear->size() == nVertices);
   for (double value : *result.vertexShear) {
     assert(std::isfinite(value));
+  }
+}
+
+void testHighLevelGeneratorGoldenEndpoints(const std::filesystem::path& root, const std::string& name) {
+  const std::filesystem::path fixtureDir = root / name;
+  const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
+  const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
+  const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
+  const std::vector<geodesic_draping::Vec3> goldenEnds =
+      geodesic_draping::fixture_io::loadGoldenGeneratorLastPoints(fixtureDir);
+
+  geodesic_draping::DrapeSolveOptions options;
+  options.mode = geodesic_draping::DrapeSolveMode::Fast;
+  options.retrieval = geodesic_draping::ResultDomain::Extrinsic;
+  options.sampleVertexShear = false;
+  const auto result = geodesic_draping::solveDrape(
+      mesh,
+      seedXY,
+      angleDegrees,
+      fixtureHeatOptions(),
+      options);
+
+  const std::array<const geodesic_draping::DrapeTrace*, 4> traces = {
+      &result.traces[0].positive,
+      &result.traces[0].negative,
+      &result.traces[1].positive,
+      &result.traces[1].negative,
+  };
+  if (goldenEnds.size() != traces.size()) {
+    throw std::runtime_error(name + " high-level generator golden endpoint count mismatch");
+  }
+  for (size_t i = 0; i < traces.size(); ++i) {
+    if (traces[i]->extrinsicPoints.empty()) {
+      throw std::runtime_error(name + " high-level generator " + std::to_string(i) + " returned no points");
+    }
+    requireNearVector(
+        traces[i]->extrinsicPoints.back(),
+        goldenEnds[i],
+        1e-5,
+        name + " high-level generator " + std::to_string(i) + " end");
   }
 }
 
@@ -249,6 +306,7 @@ int main() {
 
   const auto demo = solveFixture(fixtureRoot, "demo_part");
   requireFiniteComplete(demo, geodesic_draping::fixture_io::loadMesh(fixtureRoot / "demo_part").vertices.size());
+  testHighLevelGeneratorGoldenEndpoints(fixtureRoot, "demo_part");
   testPersistentSolver(fixtureRoot, "demo_part");
   testOneShotComplete(fixtureRoot, "tiny_planar");
   try {

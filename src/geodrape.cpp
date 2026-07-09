@@ -104,23 +104,6 @@ gcs::BarycentricVector normalizeVector(gcs::BarycentricVector vector,
   return vector / magnitude;
 }
 
-gcs::BarycentricVector faceTangentVectorToBarycentric(gcs::Face face,
-                                                      const geometrycentral::Vector2& tangentVector,
-                                                      gcs::IntrinsicGeometryInterface& geometry) {
-  geometry.requireHalfedgeVectorsInFace();
-  const geometrycentral::Vector2 p1 = geometry.halfedgeVectorsInFace[face.halfedge()];
-  const geometrycentral::Vector2 p2 = -geometry.halfedgeVectorsInFace[face.halfedge().next().next()];
-  const double det = p1.x * p2.y - p1.y * p2.x;
-  if (det == 0.0) {
-    geometry.unrequireHalfedgeVectorsInFace();
-    throw std::runtime_error("cannot convert tangent vector on degenerate face");
-  }
-  const double b1 = (tangentVector.x * p2.y - tangentVector.y * p2.x) / det;
-  const double b2 = (p1.x * tangentVector.y - p1.y * tangentVector.x) / det;
-  geometry.unrequireHalfedgeVectorsInFace();
-  return gcs::BarycentricVector(face, geometrycentral::Vector3{-b1 - b2, b1, b2});
-}
-
 gcs::BarycentricVector toBarycentricVector(gcs::SurfaceMesh& mesh,
                                            const TangentVectorRef& ref) {
   if (ref.type != SurfaceReferenceType::Face || ref.coords.size() != 3) {
@@ -215,11 +198,9 @@ gcs::BarycentricVector intrinsicDirectionFromFabricAngle(ReferenceGeometry& refe
   }
   tangentDirection /= tangentNorm;
 
+  const gcs::SurfacePoint intrinsicSeedFace = intrinsicSeed.inSomeFace();
   if (inputConnectivityPreserved) {
-    const gcs::SurfacePoint intrinsicSeedFace = intrinsicSeed.inSomeFace();
-    return normalizeVector(
-        faceTangentVectorToBarycentric(intrinsicSeedFace.face, tangentDirection, activeDomain.geometry()),
-        activeDomain.geometry());
+    return embeddedActiveFaceDirection(reference, activeDomain, intrinsicSeedFace.face, fabricAngle);
   }
 
   const double baseStep = std::max(1e-9, 1e-6 * boundingBoxDiagonal(reference.meshData()));
@@ -228,7 +209,6 @@ gcs::BarycentricVector intrinsicDirectionFromFabricAngle(ReferenceGeometry& refe
   options.errorOnProblem = false;
   options.maxIters = 16;
 
-  const gcs::SurfacePoint intrinsicSeedFace = intrinsicSeed.inSomeFace();
   for (size_t attempt = 0; attempt < 8; ++attempt) {
     const double step = baseStep * std::pow(0.25, static_cast<double>(attempt));
     const gcs::TraceGeodesicResult inputTrace =
