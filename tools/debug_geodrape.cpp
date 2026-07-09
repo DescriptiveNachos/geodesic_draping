@@ -209,13 +209,19 @@ int main(int argc, char** argv) {
     completeOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
     const geodesic_draping::DrapeResult result =
         geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, heatOptions, completeOptions);
+    geodesic_draping::DrapeSolveOptions completeFieldOptions = completeOptions;
+    completeFieldOptions.retrieval = geodesic_draping::ResultDomain::Intrinsic;
+    const geodesic_draping::DrapeResult completeFieldResult =
+        geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, heatOptions, completeFieldOptions);
     geodesic_draping::DrapeSolveOptions fastOptions;
     fastOptions.mode = geodesic_draping::DrapeSolveMode::Fast;
+    fastOptions.retrieval = geodesic_draping::ResultDomain::Intrinsic;
     fastOptions.sampleVertexShear = true;
     const geodesic_draping::DrapeResult fastResult =
         geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, heatOptions, fastOptions);
-    if (!result.distances || !result.vertexShearAnglesDegrees ||
-        !fastResult.faceShearAnglesDegrees || !fastResult.vertexShearAnglesDegrees) {
+    if (!result.distances || !result.vertexShear ||
+        !completeFieldResult.distances || !completeFieldResult.vertexShear ||
+        !fastResult.faceShear || !fastResult.vertexShear) {
       throw std::runtime_error("debug solve did not return the expected fields");
     }
     if (!result.origin.intrinsicPoint ||
@@ -295,7 +301,7 @@ int main(int argc, char** argv) {
 
     printStats("dist_0", (*result.distances)[0]);
     printStats("dist_1", (*result.distances)[1]);
-    printStats("shear_degrees", *result.vertexShearAnglesDegrees);
+    printStats("shear_degrees", *result.vertexShear);
     printScalarComparison("dist_0",
                           (*result.distances)[0],
                           geodesic_draping::fixture_io::loadGoldenScalarArray(fixtureDir, "dist_0"));
@@ -303,32 +309,31 @@ int main(int argc, char** argv) {
                           (*result.distances)[1],
                           geodesic_draping::fixture_io::loadGoldenScalarArray(fixtureDir, "dist_1"));
     printScalarComparison("shear",
-                          *result.vertexShearAnglesDegrees,
+                          *result.vertexShear,
                           geodesic_draping::fixture_io::loadGoldenShearArray(fixtureDir, "complete"));
     std::cout << "\n";
-    printStats("fast_face_shear", *fastResult.faceShearAnglesDegrees);
-    printStats("fast_vertex_shear", *fastResult.vertexShearAnglesDegrees);
+    printStats("fast_face_shear", *fastResult.faceShear);
+    printStats("fast_vertex_shear", *fastResult.vertexShear);
     std::cout << "\n";
     auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
-    const auto completeDirections0 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, result.faceDirections[0]);
-    const auto completeDirections1 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, result.faceDirections[1]);
+    const auto completeDirections0 = geodesic_draping::directionsToExtrinsicVectors(surface, completeFieldResult.directions[0]);
+    const auto completeDirections1 = geodesic_draping::directionsToExtrinsicVectors(surface, completeFieldResult.directions[1]);
     printMagnitudeDiagnostics("complete face dir_0", geodesic_draping::analyzeVectorMagnitudes(completeDirections0));
     printMagnitudeDiagnostics("complete face dir_1", geodesic_draping::analyzeVectorMagnitudes(completeDirections1));
-    const auto faceDirections0 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fastResult.faceDirections[0]);
-    const auto faceDirections1 = geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fastResult.faceDirections[1]);
-    printMagnitudeDiagnostics("fast face dir_0", geodesic_draping::analyzeVectorMagnitudes(faceDirections0));
-    printMagnitudeDiagnostics("fast face dir_1", geodesic_draping::analyzeVectorMagnitudes(faceDirections1));
-    printShearSummary("fast face", *fastResult.faceShearAnglesDegrees);
-    printShearSummary("fast vertex", *fastResult.vertexShearAnglesDegrees);
+    const auto directions0 = geodesic_draping::directionsToExtrinsicVectors(surface, fastResult.directions[0]);
+    const auto directions1 = geodesic_draping::directionsToExtrinsicVectors(surface, fastResult.directions[1]);
+    printMagnitudeDiagnostics("fast face dir_0", geodesic_draping::analyzeVectorMagnitudes(directions0));
+    printMagnitudeDiagnostics("fast face dir_1", geodesic_draping::analyzeVectorMagnitudes(directions1));
+    printShearSummary("fast face", *fastResult.faceShear);
+    printShearSummary("fast vertex", *fastResult.vertexShear);
     printQualityReport("complete", geodesic_draping::analyzeSolveQuality(mesh, result, qualityThresholds));
-    printQualityReport("fast", geodesic_draping::analyzeSolveQuality(mesh, fastResult, qualityThresholds));
 
     ProjectionPlotOptions options;
     options.name = fixtureName + " drape comparison";
     options.directionLength = directionLength;
     options.clearExisting = true;
     options.show = show;
-    geodesic_draping::plotDrapeComparisonResult(mesh, result, fastResult, options);
+    geodesic_draping::plotDrapeComparisonResult(mesh, completeFieldResult, fastResult, options);
 
     if (!show) {
       std::cout << "\nPlot data registered with Polyscope, but --no-show was set.\n";

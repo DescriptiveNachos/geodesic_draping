@@ -55,7 +55,6 @@ struct DrapeSolveOptions {
   DrapeSolveMode mode = DrapeSolveMode::Complete;
   ResultDomain retrieval = ResultDomain::Extrinsic;
   bool sampleVertexShear = true;
-  bool sampleSecondaryShear = false;
   AdvancedSolveOptions advanced;
 };
 
@@ -102,10 +101,10 @@ struct DrapeResult {
   DrapeOrigin origin;
   std::array<TraceFamily, 2> traces;
 
-  std::array<FaceHeatDirectionField, 2> faceDirections;
+  std::array<FaceHeatDirectionField, 2> directions;
   std::optional<std::array<std::vector<double>, 2>> distances;
-  std::optional<std::vector<double>> faceShearAnglesDegrees;
-  std::optional<std::vector<double>> vertexShearAnglesDegrees;
+  std::optional<std::vector<double>> faceShear;
+  std::optional<std::vector<double>> vertexShear;
 };
 
 class ReferenceGeometry {
@@ -153,14 +152,11 @@ struct CoreIntrinsicResult {
   SurfaceReference intrinsicSeed;
   std::array<TangentVectorRef, 4> intrinsicDirections;
   SeedProjection seed;
-  std::array<Vec3, 4> directions;
+  std::array<Vec3, 4> cartesianDirections;
   std::array<GeneratorTrace, 4> generators;
-  SourceCurves sourceCurves;
-  std::array<CustomSignedHeatResult, 2> customHeatSolves;
-  std::array<FaceHeatDirectionField, 2> faceDirections;
+  std::array<FaceHeatDirectionField, 2> directions;
   std::optional<std::array<std::vector<double>, 2>> distances;
-  std::optional<std::array<std::vector<Vec3>, 2>> gradients;
-  std::optional<std::vector<double>> faceShearAnglesDegrees;
+  std::optional<std::vector<double>> faceShear;
 };
 
 class GeoDrapeSolver {
@@ -179,6 +175,10 @@ public:
                     double fabricAngleDegrees,
                     double fiberAngleDegrees,
                     const DrapeSolveOptions& solveOptions = {});
+  DrapeResult solveFromIntrinsic(const SurfaceReference& seed,
+                                 const TangentVectorRef& fabricDirection,
+                                 double fiberAngleDegrees = 90.0,
+                                 const DrapeSolveOptions& solveOptions = {});
   DrapeResult retrieve(ResultDomain retrieval = ResultDomain::Extrinsic,
                        bool sampleVertexShear = true);
 

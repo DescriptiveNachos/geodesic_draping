@@ -58,22 +58,24 @@ void testFixtureSmoke(const std::filesystem::path& fixtureRoot) {
 
   geodesic_draping::DrapeSolveOptions completeOptions;
   completeOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
+  completeOptions.retrieval = geodesic_draping::ResultDomain::Intrinsic;
   const auto complete = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, completeOptions);
   geodesic_draping::DrapeSolveOptions fastOptions;
   fastOptions.mode = geodesic_draping::DrapeSolveMode::Fast;
+  fastOptions.retrieval = geodesic_draping::ResultDomain::Intrinsic;
   const auto fast = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, fastOptions);
   auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
   const std::array<geodesic_draping::VectorMagnitudeDiagnostics, 2> completeDiagnostics{
       geodesic_draping::analyzeVectorMagnitudes(
-          geodesic_draping::faceDirectionsToExtrinsicVectors(surface, complete.faceDirections[0])),
+          geodesic_draping::directionsToExtrinsicVectors(surface, complete.directions[0])),
       geodesic_draping::analyzeVectorMagnitudes(
-          geodesic_draping::faceDirectionsToExtrinsicVectors(surface, complete.faceDirections[1])),
+          geodesic_draping::directionsToExtrinsicVectors(surface, complete.directions[1])),
   };
   const std::array<geodesic_draping::VectorMagnitudeDiagnostics, 2> fastDiagnostics{
       geodesic_draping::analyzeVectorMagnitudes(
-          geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fast.faceDirections[0])),
+          geodesic_draping::directionsToExtrinsicVectors(surface, fast.directions[0])),
       geodesic_draping::analyzeVectorMagnitudes(
-          geodesic_draping::faceDirectionsToExtrinsicVectors(surface, fast.faceDirections[1])),
+          geodesic_draping::directionsToExtrinsicVectors(surface, fast.directions[1])),
   };
 
   for (const auto& diagnostic : completeDiagnostics) {

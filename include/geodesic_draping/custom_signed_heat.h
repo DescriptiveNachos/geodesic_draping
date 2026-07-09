@@ -100,7 +100,7 @@ private:
 FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& surface,
                                                         const EdgeHeatField& diffusedEdgeHeatField);
 
-std::vector<Vec3> faceDirectionsToExtrinsicVectors(
+std::vector<Vec3> directionsToExtrinsicVectors(
     GeometryCentralSurface& surface,
     const FaceHeatDirectionField& normalizedFaceDirections);
 

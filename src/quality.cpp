@@ -232,15 +232,15 @@ std::vector<std::pair<size_t, size_t>> scalarAdjacency(const SurfaceMeshData& me
 ShearQualityStats analyzePrimaryShearQuality(const SurfaceMeshData& mesh, const DrapeResult& result) {
   const std::vector<double>* shear = nullptr;
   if (result.mode == DrapeSolveMode::Complete) {
-    if (!result.vertexShearAnglesDegrees) {
+    if (!result.vertexShear) {
       throw std::runtime_error("complete result is missing primary vertex shear");
     }
-    shear = &*result.vertexShearAnglesDegrees;
+    shear = &*result.vertexShear;
   } else {
-    if (!result.faceShearAnglesDegrees) {
+    if (!result.faceShear) {
       throw std::runtime_error("fast/hybrid result is missing primary face shear");
     }
-    shear = &*result.faceShearAnglesDegrees;
+    shear = &*result.faceShear;
   }
 
   ShearQualityStats stats;

@@ -240,10 +240,10 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
                                const DrapeResult& fastResult,
                                const ProjectionPlotOptions& options) {
 #if GEODESIC_DRAPING_HAS_POLYSCOPE
-  if (!completeResult.distances || !completeResult.vertexShearAnglesDegrees) {
+  if (!completeResult.distances || !completeResult.vertexShear) {
     throw std::runtime_error("plotDrapeComparisonResult requires a complete-mode result");
   }
-  if (!fastResult.faceShearAnglesDegrees || !fastResult.vertexShearAnglesDegrees) {
+  if (!fastResult.faceShear || !fastResult.vertexShear) {
     throw std::runtime_error("plotDrapeComparisonResult requires a fast result with sampled secondary shear");
   }
 
@@ -258,12 +258,12 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
   quantities->completeDistance1 = psMesh->addVertexSignedDistanceQuantity(
       "complete dist_1", (*completeResult.distances)[1]);
   GeometryCentralSurface surface = makeGeometryCentralSurface(mesh);
-  const std::vector<Vec3> completeDirections0 = faceDirectionsToExtrinsicVectors(
+  const std::vector<Vec3> completeDirections0 = directionsToExtrinsicVectors(
       surface,
-      completeResult.faceDirections[0]);
-  const std::vector<Vec3> completeDirections1 = faceDirectionsToExtrinsicVectors(
+      completeResult.directions[0]);
+  const std::vector<Vec3> completeDirections1 = directionsToExtrinsicVectors(
       surface,
-      completeResult.faceDirections[1]);
+      completeResult.directions[1]);
   quantities->completeGradient0 = psMesh->addFaceVectorQuantity(
       "complete grad_0", toPolyscopePoints(completeDirections0), polyscope::VectorType::AMBIENT);
   quantities->completeGradient1 = psMesh->addFaceVectorQuantity(
@@ -275,27 +275,27 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
   quantities->completeGradient1Deviation = psMesh->addFaceScalarQuantity(
       "abs(|complete grad_1| - 1)", completeMagnitudeDiagnostics1.absDeviationFromUnit);
   quantities->completeShear = psMesh->addVertexScalarQuantity(
-      "complete shear_degrees", *completeResult.vertexShearAnglesDegrees);
-  const std::vector<Vec3> fastFaceDirections0 = faceDirectionsToExtrinsicVectors(
+      "complete shear_degrees", *completeResult.vertexShear);
+  const std::vector<Vec3> fastdirections0 = directionsToExtrinsicVectors(
       surface,
-      fastResult.faceDirections[0]);
-  const std::vector<Vec3> fastFaceDirections1 = faceDirectionsToExtrinsicVectors(
+      fastResult.directions[0]);
+  const std::vector<Vec3> fastdirections1 = directionsToExtrinsicVectors(
       surface,
-      fastResult.faceDirections[1]);
-  const auto fastFaceMagnitudeDiagnostics0 = analyzeVectorMagnitudes(fastFaceDirections0);
-  const auto fastFaceMagnitudeDiagnostics1 = analyzeVectorMagnitudes(fastFaceDirections1);
+      fastResult.directions[1]);
+  const auto fastFaceMagnitudeDiagnostics0 = analyzeVectorMagnitudes(fastdirections0);
+  const auto fastFaceMagnitudeDiagnostics1 = analyzeVectorMagnitudes(fastdirections1);
   quantities->fastFaceDirection0 = psMesh->addFaceVectorQuantity(
-      "fast face dir_0", toPolyscopePoints(fastFaceDirections0), polyscope::VectorType::AMBIENT);
+      "fast face dir_0", toPolyscopePoints(fastdirections0), polyscope::VectorType::AMBIENT);
   quantities->fastFaceDirection1 = psMesh->addFaceVectorQuantity(
-      "fast face dir_1", toPolyscopePoints(fastFaceDirections1), polyscope::VectorType::AMBIENT);
+      "fast face dir_1", toPolyscopePoints(fastdirections1), polyscope::VectorType::AMBIENT);
   quantities->fastFaceDirection0Deviation = psMesh->addFaceScalarQuantity(
       "abs(|fast face dir_0| - 1)", fastFaceMagnitudeDiagnostics0.absDeviationFromUnit);
   quantities->fastFaceDirection1Deviation = psMesh->addFaceScalarQuantity(
       "abs(|fast face dir_1| - 1)", fastFaceMagnitudeDiagnostics1.absDeviationFromUnit);
   quantities->fastFaceShear = psMesh->addFaceScalarQuantity(
-      "fast face shear_degrees", *fastResult.faceShearAnglesDegrees);
+      "fast face shear_degrees", *fastResult.faceShear);
   quantities->fastVertexShear = psMesh->addVertexScalarQuantity(
-      "fast vertex shear_degrees", *fastResult.vertexShearAnglesDegrees);
+      "fast vertex shear_degrees", *fastResult.vertexShear);
   applyDrapeComparisonDisplay(*quantities);
 
   registerOriginDirectionsAndTraces(options.name, completeResult, options.directionLength);

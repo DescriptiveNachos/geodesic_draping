@@ -17,10 +17,10 @@ geodesic_draping::SignedHeatSolveOptions fixtureHeatOptions() {
   return options;
 }
 
-geodesic_draping::DrapeSolveOptions completeOptions(bool sampleSecondaryShear = false) {
+geodesic_draping::DrapeSolveOptions completeOptions(bool sampleVertexShear = true) {
   geodesic_draping::DrapeSolveOptions options;
   options.mode = geodesic_draping::DrapeSolveMode::Complete;
-  options.sampleSecondaryShear = sampleSecondaryShear;
+  options.sampleVertexShear = sampleVertexShear;
   return options;
 }
 
@@ -42,23 +42,15 @@ void requireNearArray(const std::vector<double>& actual,
 void requireFiniteComplete(const geodesic_draping::DrapeResult& result, size_t nVertices) {
   assert(result.mode == geodesic_draping::DrapeSolveMode::Complete);
   assert(result.distances);
-  assert(result.vertexShearAnglesDegrees);
+  assert(result.vertexShear);
   for (const auto& distance : *result.distances) {
     assert(distance.size() == nVertices);
     for (double value : distance) {
       assert(std::isfinite(value));
     }
   }
-  for (const auto& directions : result.faceDirections) {
-    assert(!directions.empty());
-    for (const auto& value : directions) {
-      assert(std::isfinite(value.x()));
-      assert(std::isfinite(value.y()));
-      assert(std::isfinite(value.z()));
-    }
-  }
-  assert(result.vertexShearAnglesDegrees->size() == nVertices);
-  for (double value : *result.vertexShearAnglesDegrees) {
+  assert(result.vertexShear->size() == nVertices);
+  for (double value : *result.vertexShear) {
     assert(std::isfinite(value));
   }
 }
@@ -85,10 +77,10 @@ void testPersistentSolver(const std::filesystem::path& root, const std::string& 
   const auto first = solver.solve(seedXY, angleDegrees, options);
   const auto second = solver.solve(seedXY, angleDegrees, options);
   assert(first.distances && second.distances);
-  assert(first.vertexShearAnglesDegrees && second.vertexShearAnglesDegrees);
+  assert(first.vertexShear && second.vertexShear);
   requireNearArray((*second.distances)[0], (*first.distances)[0], 1e-12, name + " persistent complete dist_0");
   requireNearArray((*second.distances)[1], (*first.distances)[1], 1e-12, name + " persistent complete dist_1");
-  requireNearArray(*second.vertexShearAnglesDegrees, *first.vertexShearAnglesDegrees, 1e-12, name + " persistent complete shear");
+  requireNearArray(*second.vertexShear, *first.vertexShear, 1e-12, name + " persistent complete shear");
 }
 
 void testOneShotComplete(const std::filesystem::path& root, const std::string& name) {
@@ -100,34 +92,38 @@ void testOneShotComplete(const std::filesystem::path& root, const std::string& n
 
   const auto oneShot = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions(), solveOptions);
   assert(oneShot.distances);
-  assert(!oneShot.faceShearAnglesDegrees);
-  assert(oneShot.vertexShearAnglesDegrees);
+  assert(!oneShot.faceShear);
+  assert(oneShot.vertexShear);
   requireNearArray((*oneShot.distances)[0], (*oneShot.distances)[0], 1e-12, name + " one-shot complete dist_0");
   requireNearArray((*oneShot.distances)[1], (*oneShot.distances)[1], 1e-12, name + " one-shot complete dist_1");
-  requireNearArray(*oneShot.vertexShearAnglesDegrees,
-                   *oneShot.vertexShearAnglesDegrees,
+  requireNearArray(*oneShot.vertexShear,
+                   *oneShot.vertexShear,
                    1e-12,
                    name + " one-shot complete shear");
 
-  const auto sampled = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions(), completeOptions(true));
-  assert(sampled.faceShearAnglesDegrees);
-  assert(sampled.faceShearAnglesDegrees->size() == mesh.faces.size());
+  geodesic_draping::DrapeSolveOptions intrinsicOptions = completeOptions(false);
+  intrinsicOptions.retrieval = geodesic_draping::ResultDomain::Intrinsic;
+  const auto intrinsic = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, fixtureHeatOptions(), intrinsicOptions);
+  assert(intrinsic.faceShear);
+  assert(intrinsic.faceShear->size() == mesh.faces.size());
 }
 
 void requireFiniteFaceShear(const geodesic_draping::DrapeResult& result, const std::string& label) {
-  if (!result.faceShearAnglesDegrees) {
+  if (!result.faceShear) {
     throw std::runtime_error(label + " did not return face shear");
   }
-  if (result.faceShearAnglesDegrees->empty()) {
+  if (result.faceShear->empty()) {
     throw std::runtime_error(label + " returned empty face shear");
   }
-  for (double value : *result.faceShearAnglesDegrees) {
+  for (double value : *result.faceShear) {
     if (!std::isfinite(value)) {
       throw std::runtime_error(label + " contains non-finite face shear");
     }
   }
   for (const auto& family : result.traces) {
-    if (family.positive.extrinsicPoints.empty() || family.negative.extrinsicPoints.empty()) {
+    const bool positiveEmpty = family.positive.extrinsicPoints.empty() && family.positive.intrinsicPoints.empty();
+    const bool negativeEmpty = family.negative.extrinsicPoints.empty() && family.negative.intrinsicPoints.empty();
+    if (positiveEmpty || negativeEmpty) {
       throw std::runtime_error(label + " returned an empty generator trace");
     }
   }
@@ -141,6 +137,7 @@ void testRefinementSmoke(const std::filesystem::path& root) {
 
   geodesic_draping::DrapeSolveOptions options;
   options.mode = geodesic_draping::DrapeSolveMode::Fast;
+  options.retrieval = geodesic_draping::ResultDomain::Intrinsic;
   options.sampleVertexShear = false;
 
   geodesic_draping::RefinementOptions flip;
@@ -181,8 +178,8 @@ void testIntrinsicRetrieval(const std::filesystem::path& root) {
   assert(!result.traces[0].positive.intrinsicPoints.empty());
   assert(!result.traces[0].negative.intrinsicPoints.empty());
   assert(result.distances);
-  assert(result.faceShearAnglesDegrees);
-  assert(result.vertexShearAnglesDegrees);
+  assert(result.faceShear);
+  assert(result.vertexShear);
 }
 
 void testSubdivisionRetrieval(const std::filesystem::path& root) {
@@ -206,15 +203,15 @@ void testSubdivisionRetrieval(const std::filesystem::path& root) {
   assert(result.mesh.vertices3D);
   assert(!result.mesh.vertices3D->empty());
   assert(!result.mesh.faces.empty());
-  assert(result.faceShearAnglesDegrees);
-  assert(result.faceShearAnglesDegrees->size() == result.mesh.faces.size());
-  assert(result.vertexShearAnglesDegrees);
-  assert(result.vertexShearAnglesDegrees->size() == result.mesh.vertices3D->size());
+  assert(result.faceShear);
+  assert(result.faceShear->size() == result.mesh.faces.size());
+  assert(result.vertexShear);
+  assert(result.vertexShear->size() == result.mesh.vertices3D->size());
   assert(result.distances);
   assert((*result.distances)[0].size() == result.mesh.vertices3D->size());
-  assert(result.faceDirections[0].size() == result.mesh.faces.size());
+  assert(result.directions[0].size() == result.mesh.faces.size());
   assert(!result.traces[0].positive.extrinsicPoints.empty());
-  for (double value : *result.faceShearAnglesDegrees) {
+  for (double value : *result.faceShear) {
     assert(std::isfinite(value));
   }
 }
@@ -234,7 +231,7 @@ int main() {
                    geodesic_draping::fixture_io::loadGoldenScalarArray(fixtureRoot / "tiny_planar", "dist_1"),
                    1e-8,
                    "tiny complete dist_1");
-  requireNearArray(*tiny.vertexShearAnglesDegrees,
+  requireNearArray(*tiny.vertexShear,
                    geodesic_draping::fixture_io::loadGoldenShearArray(fixtureRoot / "tiny_planar", "complete"),
                    1e-8,
                    "tiny complete shear");

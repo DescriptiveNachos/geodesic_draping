@@ -660,13 +660,13 @@ FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& 
   return normalized;
 }
 
-std::vector<Vec3> faceDirectionsToExtrinsicVectors(
+std::vector<Vec3> directionsToExtrinsicVectors(
     GeometryCentralSurface& surface,
     const FaceHeatDirectionField& normalizedFaceDirections) {
   auto& mesh = *surface.mesh;
   auto& geometry = *surface.geometry;
   if (normalizedFaceDirections.size() != mesh.nFaces()) {
-    throw std::runtime_error("faceDirectionsToExtrinsicVectors requires one direction per face");
+    throw std::runtime_error("directionsToExtrinsicVectors requires one direction per face");
   }
 
   geometry.requireVertexPositions();

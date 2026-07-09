@@ -38,7 +38,7 @@ SurfaceReference toSurfaceReference(const geometrycentral::surface::SurfacePoint
   case geometrycentral::surface::SurfacePointType::Face:
     ref.type = SurfaceReferenceType::Face;
     ref.elementIndex = point.face.getIndex();
-    ref.params = {point.faceCoords.x, point.faceCoords.y};
+    ref.params = {point.faceCoords.x, point.faceCoords.y, point.faceCoords.z};
     break;
   }
   return ref;
