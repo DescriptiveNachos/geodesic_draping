@@ -214,6 +214,18 @@ target_compile_definitions(benchmark_geodrape
   PRIVATE
     GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
 
+add_executable(profile_geodrape
+  tools/profile_geodrape.cpp)
+target_link_libraries(profile_geodrape
+  PRIVATE
+    geodesic_draping)
+target_include_directories(profile_geodrape
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+target_compile_definitions(profile_geodrape
+  PRIVATE
+    GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+
 add_executable(debug_intrinsic_subdivision
   tools/debug_intrinsic_subdivision.cpp)
 target_link_libraries(debug_intrinsic_subdivision
