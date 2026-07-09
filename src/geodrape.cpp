@@ -22,10 +22,10 @@ geometrycentral::Vector3 toGcVector3(const Vec3& value) {
   return geometrycentral::Vector3{value.x(), value.y(), value.z()};
 }
 
-std::array<Vec3, 4> generateFamilyDirections(double fabricAngleDegrees,
-                                             double fiberAngleDegrees) {
-  const double fabricAngleRadians = fabricAngleDegrees * pi / 180.0;
-  const double fiberAngleRadians = fiberAngleDegrees * pi / 180.0;
+std::array<Vec3, 4> generateCartesianFamilyDirections(double fabricAngle,
+                                                       double fiberAngle) {
+  const double fabricAngleRadians = fabricAngle * pi / 180.0;
+  const double fiberAngleRadians = fiberAngle * pi / 180.0;
 
   const Vec3 direction0(std::cos(fabricAngleRadians), std::sin(fabricAngleRadians), 0.0);
   const Vec3 direction1(std::cos(fabricAngleRadians + fiberAngleRadians),
@@ -146,7 +146,7 @@ std::array<Vec3, 4> cartesianDirectionsFromIntrinsic(ReferenceGeometry& referenc
 gcs::BarycentricVector embeddedActiveFaceDirection(ReferenceGeometry& reference,
                                                   ActiveIntrinsicDomain& activeDomain,
                                                   gcs::Face activeFace,
-                                                  double angleDegrees) {
+                                                  double angle) {
   std::array<Vec3, 3> positions;
   size_t i = 0;
   for (gcs::Vertex vertex : activeFace.adjacentVertices()) {
@@ -155,8 +155,8 @@ gcs::BarycentricVector embeddedActiveFaceDirection(ReferenceGeometry& reference,
     ++i;
   }
 
-  const Vec3 ambient(std::cos(angleDegrees * pi / 180.0),
-                     std::sin(angleDegrees * pi / 180.0),
+  const Vec3 ambient(std::cos(angle * pi / 180.0),
+                     std::sin(angle * pi / 180.0),
                      0.0);
   const Vec3 e1 = positions[1] - positions[0];
   const Vec3 e2 = positions[2] - positions[0];
@@ -171,18 +171,18 @@ gcs::BarycentricVector embeddedActiveFaceDirection(ReferenceGeometry& reference,
       activeDomain.geometry());
 }
 
-gcs::BarycentricVector intrinsicDirectionFromInputAngle(ReferenceGeometry& reference,
-                                                       ActiveIntrinsicDomain& activeDomain,
-                                                       const gcs::SurfacePoint& inputSeed,
-                                                       const gcs::SurfacePoint& intrinsicSeed,
-                                                       double angleDegrees,
-                                                       bool preservesInputConnectivity) {
+gcs::BarycentricVector intrinsicDirectionFromFabricAngle(ReferenceGeometry& reference,
+                                                        ActiveIntrinsicDomain& activeDomain,
+                                                        const gcs::SurfacePoint& inputSeed,
+                                                        const gcs::SurfacePoint& intrinsicSeed,
+                                                        double fabricAngle,
+                                                        bool inputConnectivityPreserved) {
   auto& inputGeometry = *reference.surface().geometry;
   const gcs::SurfacePoint inputFaceSeed = inputSeed.inSomeFace();
   inputGeometry.requireFaceTangentBasis();
 
-  const Vec3 ambientDirection(std::cos(angleDegrees * pi / 180.0),
-                              std::sin(angleDegrees * pi / 180.0),
+  const Vec3 ambientDirection(std::cos(fabricAngle * pi / 180.0),
+                              std::sin(fabricAngle * pi / 180.0),
                               0.0);
   const geometrycentral::Vector3 ambient = toGcVector3(ambientDirection);
   const geometrycentral::Vector3 basisX = inputGeometry.faceTangentBasis[inputFaceSeed.face][0];
@@ -199,7 +199,7 @@ gcs::BarycentricVector intrinsicDirectionFromInputAngle(ReferenceGeometry& refer
   }
   tangentDirection /= tangentNorm;
 
-  if (preservesInputConnectivity) {
+  if (inputConnectivityPreserved) {
     const gcs::SurfacePoint intrinsicSeedFace = intrinsicSeed.inSomeFace();
     return normalizeVector(
         faceTangentVectorToBarycentric(intrinsicSeedFace.face, tangentDirection, activeDomain.geometry()),
@@ -228,7 +228,7 @@ gcs::BarycentricVector intrinsicDirectionFromInputAngle(ReferenceGeometry& refer
     }
   }
 
-  return embeddedActiveFaceDirection(reference, activeDomain, intrinsicSeedFace.face, angleDegrees);
+  return embeddedActiveFaceDirection(reference, activeDomain, intrinsicSeedFace.face, fabricAngle);
 }
 
 GeneratorTrace traceActiveGenerator(ReferenceGeometry& reference,
@@ -601,23 +601,23 @@ GeoDrapeSolver::GeoDrapeSolver(SurfaceMeshData meshData,
       activeDomain_.mesh(),
       activeDomain_.geometry(),
       heatOptions_.diffusionTimeCoefficient)),
-      preservesInputConnectivity_(refinementOptions.mode == RefinementMode::None) {}
+      inputConnectivityPreserved_(refinementOptions.mode == RefinementMode::None) {}
 
 DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
-                                  double angleDegrees,
+                                  double fabricAngle,
                                   const DrapeSolveOptions& solveOptions) {
-  return solve(seedXY, angleDegrees, 90.0, solveOptions);
+  return solve(seedXY, fabricAngle, 90.0, solveOptions);
 }
 
 DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
-                                  double fabricAngleDegrees,
-                                  double fiberAngleDegrees,
+                                  double fabricAngle,
+                                  double fiberAngle,
                                   const DrapeSolveOptions& solveOptions) {
   const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
   const IntrinsicSolveInput input = adaptExtrinsicInput(
       seedXY,
-      fabricAngleDegrees,
-      fiberAngleDegrees,
+      fabricAngle,
+      fiberAngle,
       solveOptions.mode,
       trace);
   lastIntrinsicResult_ = solveCore(input);
@@ -629,7 +629,7 @@ DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
 
 DrapeResult GeoDrapeSolver::solveFromIntrinsic(const SurfaceReference& seed,
                                                const TangentVectorRef& fabricDirection,
-                                               double fiberAngleDegrees,
+                                               double fiberAngle,
                                                const DrapeSolveOptions& solveOptions) {
   const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
   gcs::SurfacePoint intrinsicSeed =
@@ -638,7 +638,7 @@ DrapeResult GeoDrapeSolver::solveFromIntrinsic(const SurfaceReference& seed,
       toBarycentricVector(activeDomain_.mesh(), fabricDirection).inFace(intrinsicSeed.face),
       activeDomain_.geometry());
   gcs::BarycentricVector direction1 =
-      normalizeVector(direction0.rotate(activeDomain_.geometry(), fiberAngleDegrees * pi / 180.0),
+      normalizeVector(direction0.rotate(activeDomain_.geometry(), fiberAngle * pi / 180.0),
                       activeDomain_.geometry());
 
   IntrinsicSolveInput input;
@@ -664,8 +664,8 @@ DrapeResult GeoDrapeSolver::retrieve(ResultDomain retrieval, bool sampleVertexSh
 }
 
 IntrinsicSolveInput GeoDrapeSolver::adaptExtrinsicInput(const Vec2& seedXY,
-                                                        double fabricAngleDegrees,
-                                                        double fiberAngleDegrees,
+                                                        double fabricAngle,
+                                                        double fiberAngle,
                                                         DrapeSolveMode mode,
                                                         const TraceSettings& trace) {
   const std::optional<SeedProjection> seed = projectPointXYToMesh(reference_.meshData(), seedXY);
@@ -674,25 +674,25 @@ IntrinsicSolveInput GeoDrapeSolver::adaptExtrinsicInput(const Vec2& seedXY,
   }
   const gcs::SurfacePoint inputSeed = toFaceSurfacePoint(*reference_.surface().mesh, seed->surfacePoint);
   const gcs::SurfacePoint intrinsicSeed = activeDomain_.inputToIntrinsic(inputSeed).inSomeFace();
-  const gcs::BarycentricVector direction0 = intrinsicDirectionFromInputAngle(
+  const gcs::BarycentricVector direction0 = intrinsicDirectionFromFabricAngle(
       reference_,
       activeDomain_,
       inputSeed,
       intrinsicSeed,
-      fabricAngleDegrees,
-      preservesInputConnectivity_);
-  const gcs::BarycentricVector direction1 = intrinsicDirectionFromInputAngle(
+      fabricAngle,
+      inputConnectivityPreserved_);
+  const gcs::BarycentricVector direction1 = intrinsicDirectionFromFabricAngle(
       reference_,
       activeDomain_,
       inputSeed,
       intrinsicSeed,
-      fabricAngleDegrees + fiberAngleDegrees,
-      preservesInputConnectivity_);
+      fabricAngle + fiberAngle,
+      inputConnectivityPreserved_);
 
   IntrinsicSolveInput input;
   input.seed = intrinsicSeed;
   input.directions = {direction0, -direction0, direction1, -direction1};
-  input.cartesianDirections = generateFamilyDirections(fabricAngleDegrees, fiberAngleDegrees);
+  input.cartesianDirections = generateCartesianFamilyDirections(fabricAngle, fiberAngle);
   input.mode = mode;
   input.trace = trace;
   return input;
@@ -710,15 +710,15 @@ CoreIntrinsicResult GeoDrapeSolver::solveCore(const IntrinsicSolveInput& input) 
   };
   result.cartesianDirections = input.cartesianDirections;
   const gcs::SurfacePoint inputSeed = activeDomain_.intrinsicToInput(input.seed).inSomeFace();
-  result.seed.surfacePoint.faceIndex = inputSeed.face.getIndex();
-  result.seed.surfacePoint.barycentric =
+  result.extrinsicSeed.surfacePoint.faceIndex = inputSeed.face.getIndex();
+  result.extrinsicSeed.surfacePoint.barycentric =
       Vec3(inputSeed.faceCoords.x, inputSeed.faceCoords.y, inputSeed.faceCoords.z);
 
-  const Face& face = reference_.meshData().faces.at(result.seed.surfacePoint.faceIndex);
-  result.seed.cartesian =
-      result.seed.surfacePoint.barycentric(0) * reference_.meshData().vertices[face[0]] +
-      result.seed.surfacePoint.barycentric(1) * reference_.meshData().vertices[face[1]] +
-      result.seed.surfacePoint.barycentric(2) * reference_.meshData().vertices[face[2]];
+  const Face& face = reference_.meshData().faces.at(result.extrinsicSeed.surfacePoint.faceIndex);
+  result.extrinsicSeed.cartesian =
+      result.extrinsicSeed.surfacePoint.barycentric(0) * reference_.meshData().vertices[face[0]] +
+      result.extrinsicSeed.surfacePoint.barycentric(1) * reference_.meshData().vertices[face[1]] +
+      result.extrinsicSeed.surfacePoint.barycentric(2) * reference_.meshData().vertices[face[2]];
 
   result.generators = traceActiveGenerators(
       reference_,
@@ -792,7 +792,7 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
     result.mesh = makeSubdivisionResultMesh(subdivision, *reference_.surface().geometry);
     result.origin.intrinsicPoint = core.intrinsicSeed;
     result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
-    result.origin.extrinsicPoint = core.seed.cartesian;
+    result.origin.extrinsicPoint = core.extrinsicSeed.cartesian;
     result.origin.extrinsicFamilyDirections = {core.cartesianDirections[0], core.cartesianDirections[2]};
     result.traces = makeTraceFamilies(core.generators, ResultDomain::Subdivision);
 
@@ -825,7 +825,7 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
     result.mesh = makeExtrinsicResultMesh(reference_.meshData());
     result.origin.intrinsicPoint = core.intrinsicSeed;
     result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
-    result.origin.extrinsicPoint = core.seed.cartesian;
+    result.origin.extrinsicPoint = core.extrinsicSeed.cartesian;
     result.origin.extrinsicFamilyDirections = {core.cartesianDirections[0], core.cartesianDirections[2]};
     result.traces = makeTraceFamilies(core.generators, ResultDomain::Extrinsic);
 
@@ -856,11 +856,11 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
 
 DrapeResult solveDrape(const SurfaceMeshData& mesh,
                        const Vec2& seedXY,
-                       double angleDegrees,
+                       double fabricAngle,
                        const SignedHeatSolveOptions& heatOptions,
                        const DrapeSolveOptions& solveOptions) {
   GeoDrapeSolver solver(mesh, heatOptions);
-  return solver.solve(seedXY, angleDegrees, solveOptions);
+  return solver.solve(seedXY, fabricAngle, solveOptions);
 }
 
 } // namespace geodesic_draping

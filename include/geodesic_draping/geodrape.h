@@ -151,7 +151,7 @@ struct CoreIntrinsicResult {
   DrapeSolveMode mode = DrapeSolveMode::Complete;
   SurfaceReference intrinsicSeed;
   std::array<TangentVectorRef, 4> intrinsicDirections;
-  SeedProjection seed;
+  SeedProjection extrinsicSeed;
   std::array<Vec3, 4> cartesianDirections;
   std::array<GeneratorTrace, 4> generators;
   std::array<FaceHeatDirectionField, 2> directions;
@@ -169,23 +169,23 @@ public:
                  const RefinementOptions& refinementOptions = {});
 
   DrapeResult solve(const Vec2& seedXY,
-                    double angleDegrees,
+                    double fabricAngle,
                     const DrapeSolveOptions& solveOptions = {});
   DrapeResult solve(const Vec2& seedXY,
-                    double fabricAngleDegrees,
-                    double fiberAngleDegrees,
+                    double fabricAngle,
+                    double fiberAngle,
                     const DrapeSolveOptions& solveOptions = {});
   DrapeResult solveFromIntrinsic(const SurfaceReference& seed,
                                  const TangentVectorRef& fabricDirection,
-                                 double fiberAngleDegrees = 90.0,
+                                 double fiberAngle = 90.0,
                                  const DrapeSolveOptions& solveOptions = {});
   DrapeResult retrieve(ResultDomain retrieval = ResultDomain::Extrinsic,
                        bool sampleVertexShear = true);
 
 private:
   IntrinsicSolveInput adaptExtrinsicInput(const Vec2& seedXY,
-                                          double fabricAngleDegrees,
-                                          double fiberAngleDegrees,
+                                          double fabricAngle,
+                                          double fiberAngle,
                                           DrapeSolveMode mode,
                                           const TraceSettings& trace);
   CoreIntrinsicResult solveCore(const IntrinsicSolveInput& input);
@@ -199,12 +199,12 @@ private:
   SignedHeatSolveOptions heatOptions_;
   std::unique_ptr<CustomSignedHeatSolver> customHeatSolver_;
   std::optional<CoreIntrinsicResult> lastIntrinsicResult_;
-  bool preservesInputConnectivity_ = true;
+  bool inputConnectivityPreserved_ = true;
 };
 
 DrapeResult solveDrape(const SurfaceMeshData& mesh,
                        const Vec2& seedXY,
-                       double angleDegrees,
+                       double fabricAngle,
                        const SignedHeatSolveOptions& heatOptions = {},
                        const DrapeSolveOptions& solveOptions = {});
 
