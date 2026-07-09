@@ -29,7 +29,8 @@ void printUsage(const char* argv0) {
             << "  " << argv0
             << " [fixture-name] [--no-show] [--direction-length value]\n"
             << "    [--quality-thresholds path] [--refinement none|flip|refine]\n"
-            << "    [--circumradius-threshold value]\n\n"
+            << "    [--angle-threshold value] [--circumradius-threshold value]\n"
+            << "    [--subdivision-debug] [--subdivision-debug-only]\n\n"
             << "Fixtures are loaded from " << GEODESIC_DRAPING_TEST_DATA_DIR << "\n"
             << "Default fixture: demo_part\n";
 }
@@ -153,6 +154,44 @@ void printQualityReport(const std::string& label, const SolveQualityReport& repo
   }
 }
 
+void printSubdivisionDebugInfo(const geodesic_draping::CommonSubdivisionDebugInfo& info) {
+  std::cout << "\ncommon subdivision debug\n";
+  std::cout << "  raw_points " << info.rawSubdivisionPointCount
+            << "  expected_mesh V/E/F "
+            << info.expectedConstructedVertexCount << "/"
+            << info.expectedConstructedEdgeCount << "/"
+            << info.expectedConstructedFaceCount << "\n";
+  std::cout << "  point_types"
+            << " vertex_vertex " << info.vertexVertexCount
+            << " edge_transverse " << info.edgeTransverseCount
+            << " edge_parallel " << info.edgeParallelCount
+            << " face_vertex " << info.faceVertexCount
+            << " edge_vertex " << info.edgeVertexCount << "\n";
+  std::cout << "  input_vertices missing_vertex_vertex "
+            << info.missingInputVertexCount << "\n";
+  std::cout << "  pointsAlongA"
+            << " empty " << info.emptyPointsAlongACount
+            << " invalid_endpoints " << info.invalidPointsAlongAEndpointCount
+            << " nonmonotone " << info.nonMonotonePointsAlongACount << "\n";
+  std::cout << "  pointsAlongB"
+            << " empty " << info.emptyPointsAlongBCount
+            << " invalid_endpoints " << info.invalidPointsAlongBEndpointCount
+            << " nonmonotone " << info.nonMonotonePointsAlongBCount << "\n";
+  if (info.attemptedMeshConstruction) {
+    std::cout << "  constructMesh "
+              << (info.meshConstructed ? "ok" : "failed");
+    if (info.meshConstructed) {
+      std::cout << "  constructed V/F "
+                << info.constructedVertexCount << "/"
+                << info.constructedFaceCount;
+    }
+    if (info.constructionError) {
+      std::cout << "  error: " << *info.constructionError;
+    }
+    std::cout << "\n";
+  }
+}
+
 void printVectorComparison(const std::string& label, const Vec3& actual, const Vec3& golden) {
   std::cout << std::left << std::setw(18) << label << " actual [" << actual.transpose() << "]"
             << "  golden [" << golden.transpose() << "]"
@@ -199,6 +238,8 @@ int main(int argc, char** argv) {
     double directionLength = 25.0;
     geodesic_draping::SolveQualityThresholds qualityThresholds;
     geodesic_draping::RefinementOptions refinementOptions;
+    bool subdivisionDebug = false;
+    bool subdivisionDebugOnly = false;
 
     for (int i = 1; i < argc; ++i) {
       const std::string arg = argv[i];
@@ -238,6 +279,22 @@ int main(int argc, char** argv) {
         refinementOptions.circumradiusThreshold = std::stod(argv[++i]);
         continue;
       }
+      if (arg == "--angle-threshold") {
+        if (i + 1 >= argc) {
+          throw std::runtime_error("--angle-threshold requires a value");
+        }
+        refinementOptions.angleThreshold = std::stod(argv[++i]);
+        continue;
+      }
+      if (arg == "--subdivision-debug") {
+        subdivisionDebug = true;
+        continue;
+      }
+      if (arg == "--subdivision-debug-only") {
+        subdivisionDebug = true;
+        subdivisionDebugOnly = true;
+        continue;
+      }
       fixtureName = arg;
     }
     if (refinementOptions.circumradiusThreshold &&
@@ -257,6 +314,12 @@ int main(int argc, char** argv) {
         useSubdivisionRetrieval ? geodesic_draping::ResultDomain::Subdivision
                                 : geodesic_draping::ResultDomain::Intrinsic;
     geodesic_draping::GeoDrapeSolver solver(mesh, heatOptions, {}, refinementOptions);
+    if (subdivisionDebug) {
+      printSubdivisionDebugInfo(solver.debugCommonSubdivision(subdivisionDebugOnly));
+      if (subdivisionDebugOnly) {
+        return 0;
+      }
+    }
     geodesic_draping::DrapeSolveOptions completeOptions;
     completeOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
     const geodesic_draping::DrapeResult result = solver.solve(seedXY, angleDegrees, completeOptions);
@@ -298,6 +361,9 @@ int main(int argc, char** argv) {
               << "Vertices: " << mesh.vertices.size() << "  Faces: " << mesh.faces.size() << "\n"
               << "Seed XY: [" << seedXY.transpose() << "]  Angle degrees: " << angleDegrees << "\n"
               << "Refinement: " << refinementModeName(refinementOptions.mode);
+    if (refinementOptions.angleThreshold) {
+      std::cout << "  angle_threshold " << *refinementOptions.angleThreshold;
+    }
     if (refinementOptions.circumradiusThreshold) {
       std::cout << "  circumradius_threshold " << *refinementOptions.circumradiusThreshold;
     }

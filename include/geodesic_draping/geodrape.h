@@ -11,6 +11,7 @@
 #include <array>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace geodesic_draping {
@@ -67,6 +68,7 @@ struct ResultMesh {
   std::optional<std::vector<Vec3>> vertices3D;
   std::optional<std::vector<std::array<double, 3>>> edgeLengths;
   std::optional<std::vector<FaceGluingMap>> gluingMap;
+  std::optional<std::vector<double>> intrinsicSourceFaceColor;
 };
 
 struct TangentVectorRef {
@@ -158,6 +160,30 @@ struct CoreIntrinsicResult {
   std::optional<std::vector<double>> faceShear;
 };
 
+struct CommonSubdivisionDebugInfo {
+  size_t vertexVertexCount = 0;
+  size_t edgeTransverseCount = 0;
+  size_t edgeParallelCount = 0;
+  size_t faceVertexCount = 0;
+  size_t edgeVertexCount = 0;
+  size_t missingInputVertexCount = 0;
+  size_t invalidPointsAlongAEndpointCount = 0;
+  size_t invalidPointsAlongBEndpointCount = 0;
+  size_t nonMonotonePointsAlongACount = 0;
+  size_t nonMonotonePointsAlongBCount = 0;
+  size_t emptyPointsAlongACount = 0;
+  size_t emptyPointsAlongBCount = 0;
+  size_t rawSubdivisionPointCount = 0;
+  size_t expectedConstructedVertexCount = 0;
+  size_t expectedConstructedEdgeCount = 0;
+  size_t expectedConstructedFaceCount = 0;
+  bool attemptedMeshConstruction = false;
+  bool meshConstructed = false;
+  size_t constructedVertexCount = 0;
+  size_t constructedFaceCount = 0;
+  std::optional<std::string> constructionError;
+};
+
 class GeoDrapeSolver {
 public:
   explicit GeoDrapeSolver(SurfaceMeshData meshData,
@@ -180,6 +206,7 @@ public:
                                  const DrapeSolveOptions& solveOptions = {});
   DrapeResult retrieve(ResultDomain retrieval = ResultDomain::Extrinsic,
                        bool sampleVertexShear = true);
+  CommonSubdivisionDebugInfo debugCommonSubdivision(bool attemptMeshConstruction = false);
 
 private:
   IntrinsicSolveInput adaptExtrinsicInput(const Vec2& seedXY,

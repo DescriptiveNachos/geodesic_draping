@@ -252,6 +252,11 @@ void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
 
   polyscope::SurfaceMesh* psMesh =
       polyscope::registerSurfaceMesh(options.name + " mesh", toPolyscopePoints(mesh), toPolyscopeFaces(mesh));
+  if (completeResult.mesh.intrinsicSourceFaceColor) {
+    psMesh->addFaceScalarQuantity(
+        "intrinsic source face color",
+        *completeResult.mesh.intrinsicSourceFaceColor);
+  }
 
   auto quantities = std::make_shared<DrapeComparisonQuantities>();
   quantities->completeDistance0 = psMesh->addVertexSignedDistanceQuantity(
