@@ -27,9 +27,36 @@ using geodesic_draping::VectorMagnitudeDiagnostics;
 void printUsage(const char* argv0) {
   std::cout << "Usage:\n"
             << "  " << argv0
-            << " [fixture-name] [--no-show] [--direction-length value] [--quality-thresholds path]\n\n"
+            << " [fixture-name] [--no-show] [--direction-length value]\n"
+            << "    [--quality-thresholds path] [--refinement none|flip|refine]\n"
+            << "    [--circumradius-threshold value]\n\n"
             << "Fixtures are loaded from " << GEODESIC_DRAPING_TEST_DATA_DIR << "\n"
             << "Default fixture: demo_part\n";
+}
+
+geodesic_draping::RefinementMode parseRefinementMode(const std::string& value) {
+  if (value == "none") {
+    return geodesic_draping::RefinementMode::None;
+  }
+  if (value == "flip") {
+    return geodesic_draping::RefinementMode::DelaunayFlip;
+  }
+  if (value == "refine") {
+    return geodesic_draping::RefinementMode::DelaunayRefine;
+  }
+  throw std::runtime_error("--refinement must be one of: none, flip, refine");
+}
+
+std::string refinementModeName(geodesic_draping::RefinementMode mode) {
+  switch (mode) {
+  case geodesic_draping::RefinementMode::None:
+    return "none";
+  case geodesic_draping::RefinementMode::DelaunayFlip:
+    return "flip";
+  case geodesic_draping::RefinementMode::DelaunayRefine:
+    return "refine";
+  }
+  return "unknown";
 }
 
 double maxAbsDiff(const Vec3& a, const Vec3& b) {
@@ -171,6 +198,7 @@ int main(int argc, char** argv) {
     bool show = true;
     double directionLength = 25.0;
     geodesic_draping::SolveQualityThresholds qualityThresholds;
+    geodesic_draping::RefinementOptions refinementOptions;
 
     for (int i = 1; i < argc; ++i) {
       const std::string arg = argv[i];
@@ -196,7 +224,25 @@ int main(int argc, char** argv) {
         qualityThresholds = geodesic_draping::loadSolveQualityThresholds(argv[++i], qualityThresholds);
         continue;
       }
+      if (arg == "--refinement") {
+        if (i + 1 >= argc) {
+          throw std::runtime_error("--refinement requires one of: none, flip, refine");
+        }
+        refinementOptions.mode = parseRefinementMode(argv[++i]);
+        continue;
+      }
+      if (arg == "--circumradius-threshold") {
+        if (i + 1 >= argc) {
+          throw std::runtime_error("--circumradius-threshold requires a value");
+        }
+        refinementOptions.circumradiusThreshold = std::stod(argv[++i]);
+        continue;
+      }
       fixtureName = arg;
+    }
+    if (refinementOptions.circumradiusThreshold &&
+        refinementOptions.mode != geodesic_draping::RefinementMode::DelaunayRefine) {
+      throw std::runtime_error("--circumradius-threshold is only valid with --refinement refine");
     }
 
     const std::filesystem::path fixtureRoot = GEODESIC_DRAPING_TEST_DATA_DIR;
@@ -205,20 +251,24 @@ int main(int argc, char** argv) {
     const auto seedXY = geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
     const double angleDegrees = geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
     const auto heatOptions = fixtureHeatOptions();
+    const bool useSubdivisionRetrieval =
+        refinementOptions.mode != geodesic_draping::RefinementMode::None;
+    const geodesic_draping::ResultDomain fieldRetrieval =
+        useSubdivisionRetrieval ? geodesic_draping::ResultDomain::Subdivision
+                                : geodesic_draping::ResultDomain::Intrinsic;
+    geodesic_draping::GeoDrapeSolver solver(mesh, heatOptions, {}, refinementOptions);
     geodesic_draping::DrapeSolveOptions completeOptions;
     completeOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
-    const geodesic_draping::DrapeResult result =
-        geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, heatOptions, completeOptions);
+    const geodesic_draping::DrapeResult result = solver.solve(seedXY, angleDegrees, completeOptions);
     geodesic_draping::DrapeSolveOptions completeFieldOptions = completeOptions;
-    completeFieldOptions.retrieval = geodesic_draping::ResultDomain::Intrinsic;
+    completeFieldOptions.retrieval = fieldRetrieval;
     const geodesic_draping::DrapeResult completeFieldResult =
-        geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, heatOptions, completeFieldOptions);
+        solver.retrieve(fieldRetrieval, completeFieldOptions.sampleVertexShear);
     geodesic_draping::DrapeSolveOptions fastOptions;
     fastOptions.mode = geodesic_draping::DrapeSolveMode::Fast;
-    fastOptions.retrieval = geodesic_draping::ResultDomain::Intrinsic;
+    fastOptions.retrieval = fieldRetrieval;
     fastOptions.sampleVertexShear = true;
-    const geodesic_draping::DrapeResult fastResult =
-        geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, heatOptions, fastOptions);
+    const geodesic_draping::DrapeResult fastResult = solver.solve(seedXY, angleDegrees, fastOptions);
     if (!result.distances || !result.vertexShear ||
         !completeFieldResult.distances || !completeFieldResult.vertexShear ||
         !fastResult.faceShear || !fastResult.vertexShear) {
@@ -246,7 +296,12 @@ int main(int argc, char** argv) {
     std::cout << std::setprecision(17);
     std::cout << "Fixture: " << fixtureName << "\n"
               << "Vertices: " << mesh.vertices.size() << "  Faces: " << mesh.faces.size() << "\n"
-              << "Seed XY: [" << seedXY.transpose() << "]  Angle degrees: " << angleDegrees << "\n\n";
+              << "Seed XY: [" << seedXY.transpose() << "]  Angle degrees: " << angleDegrees << "\n"
+              << "Refinement: " << refinementModeName(refinementOptions.mode);
+    if (refinementOptions.circumradiusThreshold) {
+      std::cout << "  circumradius_threshold " << *refinementOptions.circumradiusThreshold;
+    }
+    std::cout << "\n\n";
 
     printVectorComparison("origin", *result.origin.extrinsicPoint, goldenOrigin);
     std::cout << std::left << std::setw(18) << "face_index"
@@ -315,7 +370,15 @@ int main(int argc, char** argv) {
     printStats("fast_face_shear", *fastResult.faceShear);
     printStats("fast_vertex_shear", *fastResult.vertexShear);
     std::cout << "\n";
-    auto surface = geodesic_draping::makeGeometryCentralSurface(mesh);
+    geodesic_draping::SurfaceMeshData plotMesh = mesh;
+    if (useSubdivisionRetrieval) {
+      if (!completeFieldResult.mesh.vertices3D) {
+        throw std::runtime_error("subdivision retrieval did not return embedded plot vertices");
+      }
+      plotMesh.vertices = *completeFieldResult.mesh.vertices3D;
+      plotMesh.faces = completeFieldResult.mesh.faces;
+    }
+    auto surface = geodesic_draping::makeGeometryCentralSurface(plotMesh);
     const auto completeDirections0 = geodesic_draping::directionsToExtrinsicVectors(surface, completeFieldResult.directions[0]);
     const auto completeDirections1 = geodesic_draping::directionsToExtrinsicVectors(surface, completeFieldResult.directions[1]);
     printMagnitudeDiagnostics("complete face dir_0", geodesic_draping::analyzeVectorMagnitudes(completeDirections0));
@@ -333,7 +396,7 @@ int main(int argc, char** argv) {
     options.directionLength = directionLength;
     options.clearExisting = true;
     options.show = show;
-    geodesic_draping::plotDrapeComparisonResult(mesh, completeFieldResult, fastResult, result, options);
+    geodesic_draping::plotDrapeComparisonResult(plotMesh, completeFieldResult, fastResult, result, options);
 
     if (!show) {
       std::cout << "\nPlot data registered with Polyscope, but --no-show was set.\n";
