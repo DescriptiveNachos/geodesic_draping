@@ -4,3 +4,4 @@ __pycache__/
 *.py[cod]
 .polyscope.ini
 imgui.ini
+benchmark_runs/
