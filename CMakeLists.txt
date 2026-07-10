@@ -19,16 +19,21 @@ if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
 endif()
 
 add_library(geodesic_draping
+  src/common_subdivision_debug.cpp
   src/diagnostics.cpp
+  src/drape_retrieval.cpp
   src/field_processing.cpp
   src/geodrape.cpp
   src/geometrycentral_adapter.cpp
   src/generator_tracing.cpp
+  src/intrinsic_domain.cpp
+  src/intrinsic_fields.cpp
   src/plotting.cpp
   src/quality.cpp
   src/seed_projection.cpp
   src/signed_heat.cpp
   src/custom_signed_heat.cpp
+  src/tangent_vectors.cpp
   src/version.cpp)
 
 target_include_directories(geodesic_draping
