@@ -61,6 +61,7 @@ struct AdvancedSolveOptions {
 
 struct DrapeSolveOptions {
   DrapeSolveMode mode = DrapeSolveMode::Complete;
+  double fiberAngle = 90.0;
   ResultDomain retrieval = ResultDomain::Extrinsic;
   bool sampleVertexShear = true;
   AdvancedSolveOptions advanced;
@@ -203,10 +204,6 @@ public:
 
   DrapeResult solve(const Vec2& seedXY,
                     double fabricAngle,
-                    const DrapeSolveOptions& solveOptions = {});
-  DrapeResult solve(const Vec2& seedXY,
-                    double fabricAngle,
-                    double fiberAngle,
                     const DrapeSolveOptions& solveOptions = {});
   DrapeResult solveFromIntrinsic(const SurfaceReference& seed,
                                  const TangentVectorRef& fabricDirection,

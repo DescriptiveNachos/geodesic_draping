@@ -27,18 +27,11 @@ GeoDrapeSolver::GeoDrapeSolver(SurfaceMeshData meshData,
 DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
                                   double fabricAngle,
                                   const DrapeSolveOptions& solveOptions) {
-  return solve(seedXY, fabricAngle, 90.0, solveOptions);
-}
-
-DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
-                                  double fabricAngle,
-                                  double fiberAngle,
-                                  const DrapeSolveOptions& solveOptions) {
   const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
   const IntrinsicSolveInput input = adaptExtrinsicInput(
       seedXY,
       fabricAngle,
-      fiberAngle,
+      solveOptions.fiberAngle,
       solveOptions.mode,
       trace);
   lastIntrinsicResult_ = solveCore(input);
