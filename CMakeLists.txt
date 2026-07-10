@@ -226,6 +226,18 @@ target_compile_definitions(profile_geodrape
   PRIVATE
     GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
 
+add_executable(profile_signed_heat
+  tools/profile_signed_heat.cpp)
+target_link_libraries(profile_signed_heat
+  PRIVATE
+    geodesic_draping)
+target_include_directories(profile_signed_heat
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+target_compile_definitions(profile_signed_heat
+  PRIVATE
+    GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+
 add_executable(debug_intrinsic_subdivision
   tools/debug_intrinsic_subdivision.cpp)
 target_link_libraries(debug_intrinsic_subdivision

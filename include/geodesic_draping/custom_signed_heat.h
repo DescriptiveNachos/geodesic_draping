@@ -29,6 +29,23 @@ struct CustomSignedHeatResult {
   std::vector<double> distance;
 };
 
+struct CustomSignedHeatStageTimings {
+  double curveConversionSeconds = 0.0;
+  double preprocessSeconds = 0.0;
+  double sourceSeconds = 0.0;
+  double diffuseSeconds = 0.0;
+  double normalizeSeconds = 0.0;
+  double distanceSeconds = 0.0;
+  double totalSeconds = 0.0;
+  bool heatSolverAlreadyInitialized = false;
+  bool poissonSolverAlreadyInitialized = false;
+};
+
+struct TimedCustomSignedHeatResult {
+  CustomSignedHeatResult result;
+  CustomSignedHeatStageTimings timings;
+};
+
 class CustomSignedHeatSolver {
 public:
   CustomSignedHeatSolver(GeometryCentralSurface& surface, double diffusionTimeCoefficient = 1.0);
@@ -43,10 +60,16 @@ public:
   CustomSignedHeatResult solve(const std::vector<SurfaceReference>& sourceCurve,
                                const SignedHeatSolveOptions& options = {},
                                bool computeDistance = false);
+  TimedCustomSignedHeatResult solveTimed(const std::vector<SurfaceReference>& sourceCurve,
+                                         const SignedHeatSolveOptions& options = {},
+                                         bool computeDistance = false);
 
   std::array<CustomSignedHeatResult, 2> solve(const SourceCurves& sourceCurves,
                                               const SignedHeatSolveOptions& options = {},
                                               bool computeDistance = false);
+  std::array<TimedCustomSignedHeatResult, 2> solveTimed(const SourceCurves& sourceCurves,
+                                                        const SignedHeatSolveOptions& options = {},
+                                                        bool computeDistance = false);
 
 private:
   geometrycentral::surface::SurfaceMesh& mesh_;

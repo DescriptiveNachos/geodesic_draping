@@ -4,6 +4,7 @@
 #include "geometrycentral/surface/barycentric_vector.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -13,6 +14,12 @@ namespace gc = geometrycentral;
 namespace gcs = geometrycentral::surface;
 
 namespace {
+
+using Clock = std::chrono::steady_clock;
+
+double secondsSince(const Clock::time_point& start) {
+  return std::chrono::duration<double>(Clock::now() - start).count();
+}
 
 gc::Vector<std::complex<double>> toEigenVector(const EdgeHeatField& values) {
   gc::Vector<std::complex<double>> out(values.size());
@@ -138,12 +145,70 @@ CustomSignedHeatResult CustomSignedHeatSolver::solve(const std::vector<SurfaceRe
   return result;
 }
 
+TimedCustomSignedHeatResult CustomSignedHeatSolver::solveTimed(
+    const std::vector<SurfaceReference>& sourceCurve,
+    const SignedHeatSolveOptions& options,
+    bool computeDistance) {
+  TimedCustomSignedHeatResult timed;
+  timed.timings.heatSolverAlreadyInitialized = static_cast<bool>(heatFieldSolver_);
+  timed.timings.poissonSolverAlreadyInitialized = static_cast<bool>(poissonSolver_);
+  const auto totalStart = Clock::now();
+
+  auto phaseStart = Clock::now();
+  gcs::Curve curve = toGeometryCentralCurve(mesh_, sourceCurve, true);
+  timed.timings.curveConversionSeconds = secondsSince(phaseStart);
+
+  phaseStart = Clock::now();
+  const std::vector<gcs::Curve> preprocessedCurves = preprocessCurves({curve});
+  timed.timings.preprocessSeconds = secondsSince(phaseStart);
+
+  timed.result.diffusion.preprocessedSourceCurves.reserve(preprocessedCurves.size());
+  for (const gcs::Curve& preprocessedCurve : preprocessedCurves) {
+    timed.result.diffusion.preprocessedSourceCurves.push_back(toSurfaceReferences(preprocessedCurve));
+  }
+
+  phaseStart = Clock::now();
+  timed.result.diffusion.sourceEdgeHeatField = buildSourceEdgeHeatField(preprocessedCurves);
+  timed.timings.sourceSeconds = secondsSince(phaseStart);
+
+  phaseStart = Clock::now();
+  timed.result.diffusion.diffusedEdgeHeatField =
+      diffuseEdgeHeatField(timed.result.diffusion.sourceEdgeHeatField, preprocessedCurves, options);
+  timed.timings.diffuseSeconds = secondsSince(phaseStart);
+
+  phaseStart = Clock::now();
+  timed.result.normalizedFaceDirections =
+      sampleAndNormalizeFaceDirections(timed.result.diffusion.diffusedEdgeHeatField);
+  timed.timings.normalizeSeconds = secondsSince(phaseStart);
+
+  if (computeDistance) {
+    phaseStart = Clock::now();
+    timed.result.distance =
+        integrateVectorFieldToDistance(timed.result.normalizedFaceDirections, preprocessedCurves, options);
+    timed.timings.distanceSeconds = secondsSince(phaseStart);
+  }
+
+  timed.timings.totalSeconds = secondsSince(totalStart);
+  return timed;
+}
+
 std::array<CustomSignedHeatResult, 2> CustomSignedHeatSolver::solve(const SourceCurves& sourceCurves,
                                                                     const SignedHeatSolveOptions& options,
                                                                     bool computeDistance) {
   std::array<CustomSignedHeatResult, 2> results;
   for (size_t i = 0; i < results.size(); ++i) {
     results[i] = solve(sourceCurves.curves[i], options, computeDistance);
+  }
+  return results;
+}
+
+std::array<TimedCustomSignedHeatResult, 2> CustomSignedHeatSolver::solveTimed(
+    const SourceCurves& sourceCurves,
+    const SignedHeatSolveOptions& options,
+    bool computeDistance) {
+  std::array<TimedCustomSignedHeatResult, 2> results;
+  for (size_t i = 0; i < results.size(); ++i) {
+    results[i] = solveTimed(sourceCurves.curves[i], options, computeDistance);
   }
   return results;
 }
