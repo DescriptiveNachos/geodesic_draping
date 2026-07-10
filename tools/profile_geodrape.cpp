@@ -157,6 +157,36 @@ Summary timeSolve(const geodesic_draping::SurfaceMeshData& mesh,
   return summarize(std::move(values));
 }
 
+Summary timeForcedIntrinsicCoreWithExtrinsicRetrieval(
+    const geodesic_draping::SurfaceMeshData& mesh,
+    const geodesic_draping::Vec2& seedXY,
+    double angleDegrees,
+    const geodesic_draping::IntrinsicConstructionOptions& intrinsic,
+    const geodesic_draping::RefinementOptions& refinement,
+    geodesic_draping::DrapeSolveMode mode,
+    bool sampleVertexShear,
+    int warmupRuns,
+    int measuredRuns) {
+  geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions(), intrinsic, refinement);
+  const geodesic_draping::DrapeSolveOptions intrinsicCoreOptions =
+      solveOptions(mode, geodesic_draping::ResultDomain::Intrinsic, false);
+
+  for (int i = 0; i < warmupRuns; ++i) {
+    consume(solver.solve(seedXY, angleDegrees, intrinsicCoreOptions));
+    consume(solver.retrieve(geodesic_draping::ResultDomain::Extrinsic, sampleVertexShear));
+  }
+
+  std::vector<double> values;
+  values.reserve(static_cast<size_t>(measuredRuns));
+  for (int i = 0; i < measuredRuns; ++i) {
+    const auto start = Clock::now();
+    consume(solver.solve(seedXY, angleDegrees, intrinsicCoreOptions));
+    consume(solver.retrieve(geodesic_draping::ResultDomain::Extrinsic, sampleVertexShear));
+    values.push_back(secondsSince(start));
+  }
+  return summarize(std::move(values));
+}
+
 Summary timeRetrieve(const geodesic_draping::SurfaceMeshData& mesh,
                      const geodesic_draping::Vec2& seedXY,
                      double angleDegrees,
@@ -342,6 +372,17 @@ int main(int argc, char** argv) {
          {geodesic_draping::DrapeSolveMode::Fast, geodesic_draping::DrapeSolveMode::Complete}) {
       printSummary("direct", fixtureName, modeName(mode) + "/prefactored",
                    timeDirectExtrinsicSolve(mesh, seedXY, angleDegrees, mode, warmupRuns, measuredRuns));
+      printSummary("solve", fixtureName, modeName(mode) + "/forced-intrinsic-core/extrinsic/+vertex",
+                   timeForcedIntrinsicCoreWithExtrinsicRetrieval(
+                       mesh,
+                       seedXY,
+                       angleDegrees,
+                       signpost,
+                       none,
+                       mode,
+                       true,
+                       warmupRuns,
+                       measuredRuns));
       for (bool sample : {false, true}) {
         const std::string sampleLabel = sample ? "+vertex" : "face-only";
         for (geodesic_draping::ResultDomain retrieval :

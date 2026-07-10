@@ -137,6 +137,7 @@ void testFixture(const std::filesystem::path& root,
   const auto hybrid = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, hybridOptions);
   geodesic_draping::DrapeSolveOptions completeOptions;
   completeOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
+  completeOptions.retrieval = geodesic_draping::ResultDomain::Intrinsic;
   const auto complete = geodesic_draping::solveDrape(mesh, seedXY, angleDegrees, options, completeOptions);
   assert(hybrid.distances);
   assert(complete.distances);

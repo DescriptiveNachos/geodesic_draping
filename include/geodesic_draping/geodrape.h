@@ -166,6 +166,7 @@ struct CoreIntrinsicResult {
   std::array<FaceHeatDirectionField, 2> directions;
   std::optional<std::array<std::vector<double>, 2>> distances;
   std::optional<std::vector<double>> faceShear;
+  std::optional<std::vector<double>> vertexShear;
 };
 
 struct CommonSubdivisionDebugInfo {
@@ -222,6 +223,11 @@ private:
                                           double fiberAngle,
                                           DrapeSolveMode mode,
                                           const TraceSettings& trace);
+  CoreIntrinsicResult solveCoreExtrinsic(const Vec2& seedXY,
+                                         double fabricAngle,
+                                         double fiberAngle,
+                                         DrapeSolveMode mode,
+                                         const TraceSettings& trace);
   CoreIntrinsicResult solveCore(const IntrinsicSolveInput& input);
   DrapeResult retrieveFromCore(const CoreIntrinsicResult& core,
                                ResultDomain retrieval,
@@ -232,8 +238,10 @@ private:
   TraceSettings traceDefaults_;
   SignedHeatSolveOptions heatOptions_;
   std::unique_ptr<CustomSignedHeatSolver> customHeatSolver_;
+  std::unique_ptr<CustomSignedHeatSolver> extrinsicHeatSolver_;
   std::optional<CoreIntrinsicResult> lastIntrinsicResult_;
   bool inputConnectivityPreserved_ = true;
+  bool extrinsicCoreAvailable_ = true;
 };
 
 DrapeResult solveDrape(const SurfaceMeshData& mesh,

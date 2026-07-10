@@ -253,6 +253,33 @@ gcs::BarycentricVector embeddedActiveFaceDirection(ReferenceGeometry& reference,
       activeDomain.geometry());
 }
 
+gcs::BarycentricVector embeddedInputFaceDirection(ReferenceGeometry& reference,
+                                                 gcs::Face face,
+                                                 const Vec3& ambientDirection) {
+  auto& geometry = *reference.surface().geometry;
+  geometry.requireVertexPositions();
+
+  std::array<Vec3, 3> positions;
+  size_t i = 0;
+  for (gcs::Vertex vertex : face.adjacentVertices()) {
+    const geometrycentral::Vector3& position = geometry.vertexPositions[vertex];
+    positions[i] = Vec3(position.x, position.y, position.z);
+    ++i;
+  }
+
+  const Vec3 e1 = positions[1] - positions[0];
+  const Vec3 e2 = positions[2] - positions[0];
+  Eigen::Matrix2d gram;
+  gram << e1.dot(e1), e1.dot(e2),
+          e2.dot(e1), e2.dot(e2);
+  Eigen::Vector2d rhs;
+  rhs << ambientDirection.dot(e1), ambientDirection.dot(e2);
+  const Eigen::Vector2d uv = gram.ldlt().solve(rhs);
+  return normalizeVector(
+      gcs::BarycentricVector(face, geometrycentral::Vector3{-uv.x() - uv.y(), uv.x(), uv.y()}),
+      geometry);
+}
+
 gcs::BarycentricVector intrinsicDirectionFromFabricAngle(ReferenceGeometry& reference,
                                                         ActiveIntrinsicDomain& activeDomain,
                                                         const gcs::SurfacePoint& inputSeed,
@@ -706,7 +733,14 @@ GeoDrapeSolver::GeoDrapeSolver(SurfaceMeshData meshData,
       activeDomain_.mesh(),
       activeDomain_.geometry(),
       heatOptions_.diffusionTimeCoefficient)),
-      inputConnectivityPreserved_(refinementOptions.mode == RefinementMode::None) {}
+      inputConnectivityPreserved_(refinementOptions.mode == RefinementMode::None),
+      extrinsicCoreAvailable_(refinementOptions.mode == RefinementMode::None) {
+  if (extrinsicCoreAvailable_) {
+    extrinsicHeatSolver_ = std::make_unique<CustomSignedHeatSolver>(
+        reference_.surface(),
+        heatOptions_.diffusionTimeCoefficient);
+  }
+}
 
 DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
                                   double fabricAngle,
@@ -719,13 +753,22 @@ DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
                                   double fiberAngle,
                                   const DrapeSolveOptions& solveOptions) {
   const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
-  const IntrinsicSolveInput input = adaptExtrinsicInput(
-      seedXY,
-      fabricAngle,
-      fiberAngle,
-      solveOptions.mode,
-      trace);
-  lastIntrinsicResult_ = solveCore(input);
+  if (extrinsicCoreAvailable_ && solveOptions.retrieval == ResultDomain::Extrinsic) {
+    lastIntrinsicResult_ = solveCoreExtrinsic(
+        seedXY,
+        fabricAngle,
+        fiberAngle,
+        solveOptions.mode,
+        trace);
+  } else {
+    const IntrinsicSolveInput input = adaptExtrinsicInput(
+        seedXY,
+        fabricAngle,
+        fiberAngle,
+        solveOptions.mode,
+        trace);
+    lastIntrinsicResult_ = solveCore(input);
+  }
   return retrieveFromCore(
       *lastIntrinsicResult_,
       solveOptions.retrieval,
@@ -912,6 +955,69 @@ IntrinsicSolveInput GeoDrapeSolver::adaptExtrinsicInput(const Vec2& seedXY,
   return input;
 }
 
+CoreIntrinsicResult GeoDrapeSolver::solveCoreExtrinsic(const Vec2& seedXY,
+                                                       double fabricAngle,
+                                                       double fiberAngle,
+                                                       DrapeSolveMode mode,
+                                                       const TraceSettings& trace) {
+  const std::optional<SeedProjection> seed = projectPointXYToMesh(reference_.meshData(), seedXY);
+  if (!seed) {
+    throw std::runtime_error("GeoDrapeSolver failed to project seed point to mesh");
+  }
+  if (!extrinsicHeatSolver_) {
+    extrinsicHeatSolver_ = std::make_unique<CustomSignedHeatSolver>(
+        reference_.surface(),
+        heatOptions_.diffusionTimeCoefficient);
+  }
+
+  const gcs::SurfacePoint inputSeed =
+      toFaceSurfacePoint(*reference_.surface().mesh, seed->surfacePoint).inSomeFace();
+  const std::array<Vec3, 4> cartesianDirections =
+      generateCartesianFamilyDirections(fabricAngle, fiberAngle);
+
+  CoreIntrinsicResult result;
+  result.mode = mode;
+  result.intrinsicSeed = toSurfaceReference(inputSeed);
+  result.intrinsicDirections = {
+      toTangentVectorRef(embeddedInputFaceDirection(reference_, inputSeed.face, cartesianDirections[0])),
+      toTangentVectorRef(embeddedInputFaceDirection(reference_, inputSeed.face, cartesianDirections[1])),
+      toTangentVectorRef(embeddedInputFaceDirection(reference_, inputSeed.face, cartesianDirections[2])),
+      toTangentVectorRef(embeddedInputFaceDirection(reference_, inputSeed.face, cartesianDirections[3])),
+  };
+  result.cartesianDirections = cartesianDirections;
+
+  result.generators =
+      traceGenerators(reference_.surface(), seed->surfacePoint, cartesianDirections, trace);
+  const SourceCurves sourceCurves = pairOppositeGeneratorTraces(result.generators);
+
+  const bool computeDistances = mode != DrapeSolveMode::Fast;
+  const std::array<CustomSignedHeatResult, 2> heatSolves =
+      extrinsicHeatSolver_->solve(sourceCurves, heatOptions_, computeDistances);
+  if (computeDistances) {
+    result.distances = std::array<std::vector<double>, 2>{};
+  }
+
+  for (size_t i = 0; i < heatSolves.size(); ++i) {
+    result.directions[i] = heatSolves[i].normalizedFaceDirections;
+    if (computeDistances) {
+      (*result.distances)[i] = heatSolves[i].distance;
+    }
+  }
+
+  if (mode == DrapeSolveMode::Complete) {
+    const auto grad0 = computeVertexScalarGradients(reference_.meshData(), (*result.distances)[0]);
+    const auto grad1 = computeVertexScalarGradients(reference_.meshData(), (*result.distances)[1]);
+    result.vertexShear = computeShearAnglesDegrees(grad0, grad1);
+  } else {
+    result.faceShear = computeFaceShearAnglesDegrees(
+        reference_.surface(),
+        result.directions[0],
+        result.directions[1]);
+  }
+
+  return result;
+}
+
 CoreIntrinsicResult GeoDrapeSolver::solveCore(const IntrinsicSolveInput& input) {
   CoreIntrinsicResult result;
   result.mode = input.mode;
@@ -992,7 +1098,11 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
     result.directions = core.directions;
     result.faceShear = core.faceShear;
     result.distances = core.distances;
-    if (sampleVertexShear && core.faceShear) {
+    if (sampleVertexShear &&
+        core.vertexShear &&
+        core.vertexShear->size() == activeDomain_.mesh().nVertices()) {
+      result.vertexShear = core.vertexShear;
+    } else if (sampleVertexShear && core.faceShear) {
       result.vertexShear =
           averageIntrinsicFaceScalarsToVertices(activeDomain_.mesh(), *core.faceShear);
     }
@@ -1040,6 +1150,9 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
     result.origin.extrinsicPoint = extrinsicSeed->cartesian;
     result.origin.extrinsicFamilyDirections = {core.cartesianDirections[0], core.cartesianDirections[2]};
     result.traces = makeTraceFamilies(core.generators, ResultDomain::Extrinsic);
+    if (core.mode != DrapeSolveMode::Complete) {
+      result.faceShear = core.faceShear;
+    }
 
     if (core.distances) {
       if ((*core.distances)[0].size() == reference_.meshData().vertices.size()) {
@@ -1052,7 +1165,9 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
       }
     }
 
-    if (sampleVertexShear && core.faceShear) {
+    if (sampleVertexShear && core.vertexShear) {
+      result.vertexShear = core.vertexShear;
+    } else if (sampleVertexShear && core.faceShear) {
       const std::vector<double> activeVertexShear =
           averageIntrinsicFaceScalarsToVertices(activeDomain_.mesh(), *core.faceShear);
       if (activeVertexShear.size() == reference_.meshData().vertices.size()) {
