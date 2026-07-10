@@ -157,6 +157,30 @@ Summary timeSolve(const geodesic_draping::SurfaceMeshData& mesh,
   return summarize(std::move(values));
 }
 
+Summary timeInitialSolve(const geodesic_draping::SurfaceMeshData& mesh,
+                         const geodesic_draping::Vec2& seedXY,
+                         double angleDegrees,
+                         const geodesic_draping::IntrinsicConstructionOptions& intrinsic,
+                         const geodesic_draping::RefinementOptions& refinement,
+                         const geodesic_draping::DrapeSolveOptions& options,
+                         int warmupRuns,
+                         int measuredRuns) {
+  for (int i = 0; i < warmupRuns; ++i) {
+    geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions(), intrinsic, refinement);
+    consume(solver.solve(seedXY, angleDegrees, options));
+  }
+
+  std::vector<double> values;
+  values.reserve(static_cast<size_t>(measuredRuns));
+  for (int i = 0; i < measuredRuns; ++i) {
+    geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions(), intrinsic, refinement);
+    const auto start = Clock::now();
+    consume(solver.solve(seedXY, angleDegrees, options));
+    values.push_back(secondsSince(start));
+  }
+  return summarize(std::move(values));
+}
+
 Summary timeForcedIntrinsicCoreWithExtrinsicRetrieval(
     const geodesic_draping::SurfaceMeshData& mesh,
     const geodesic_draping::Vec2& seedXY,
@@ -179,6 +203,37 @@ Summary timeForcedIntrinsicCoreWithExtrinsicRetrieval(
   std::vector<double> values;
   values.reserve(static_cast<size_t>(measuredRuns));
   for (int i = 0; i < measuredRuns; ++i) {
+    const auto start = Clock::now();
+    consume(solver.solve(seedXY, angleDegrees, intrinsicCoreOptions));
+    consume(solver.retrieve(geodesic_draping::ResultDomain::Extrinsic, sampleVertexShear));
+    values.push_back(secondsSince(start));
+  }
+  return summarize(std::move(values));
+}
+
+Summary timeInitialForcedIntrinsicCoreWithExtrinsicRetrieval(
+    const geodesic_draping::SurfaceMeshData& mesh,
+    const geodesic_draping::Vec2& seedXY,
+    double angleDegrees,
+    const geodesic_draping::IntrinsicConstructionOptions& intrinsic,
+    const geodesic_draping::RefinementOptions& refinement,
+    geodesic_draping::DrapeSolveMode mode,
+    bool sampleVertexShear,
+    int warmupRuns,
+    int measuredRuns) {
+  const geodesic_draping::DrapeSolveOptions intrinsicCoreOptions =
+      solveOptions(mode, geodesic_draping::ResultDomain::Intrinsic, false);
+
+  for (int i = 0; i < warmupRuns; ++i) {
+    geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions(), intrinsic, refinement);
+    consume(solver.solve(seedXY, angleDegrees, intrinsicCoreOptions));
+    consume(solver.retrieve(geodesic_draping::ResultDomain::Extrinsic, sampleVertexShear));
+  }
+
+  std::vector<double> values;
+  values.reserve(static_cast<size_t>(measuredRuns));
+  for (int i = 0; i < measuredRuns; ++i) {
+    geodesic_draping::GeoDrapeSolver solver(mesh, fixtureHeatOptions(), intrinsic, refinement);
     const auto start = Clock::now();
     consume(solver.solve(seedXY, angleDegrees, intrinsicCoreOptions));
     consume(solver.retrieve(geodesic_draping::ResultDomain::Extrinsic, sampleVertexShear));
@@ -372,6 +427,28 @@ int main(int argc, char** argv) {
          {geodesic_draping::DrapeSolveMode::Fast, geodesic_draping::DrapeSolveMode::Complete}) {
       printSummary("direct", fixtureName, modeName(mode) + "/prefactored",
                    timeDirectExtrinsicSolve(mesh, seedXY, angleDegrees, mode, warmupRuns, measuredRuns));
+      printSummary("initial", fixtureName, modeName(mode) + "/forced-intrinsic-core/extrinsic/+vertex",
+                   timeInitialForcedIntrinsicCoreWithExtrinsicRetrieval(
+                       mesh,
+                       seedXY,
+                       angleDegrees,
+                       signpost,
+                       none,
+                       mode,
+                       true,
+                       warmupRuns,
+                       measuredRuns));
+      printSummary("initial", fixtureName, modeName(mode) + "/extrinsic/+vertex",
+                   timeInitialSolve(mesh,
+                                    seedXY,
+                                    angleDegrees,
+                                    signpost,
+                                    none,
+                                    solveOptions(mode,
+                                                 geodesic_draping::ResultDomain::Extrinsic,
+                                                 true),
+                                    warmupRuns,
+                                    measuredRuns));
       printSummary("solve", fixtureName, modeName(mode) + "/forced-intrinsic-core/extrinsic/+vertex",
                    timeForcedIntrinsicCoreWithExtrinsicRetrieval(
                        mesh,
