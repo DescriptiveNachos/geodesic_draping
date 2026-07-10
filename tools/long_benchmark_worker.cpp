@@ -30,6 +30,9 @@ geodesic_draping::DrapeSolveMode parseMode(const std::string& value) {
   if (value == "fast") {
     return geodesic_draping::DrapeSolveMode::Fast;
   }
+  if (value == "hybrid") {
+    return geodesic_draping::DrapeSolveMode::Hybrid;
+  }
   if (value == "complete") {
     return geodesic_draping::DrapeSolveMode::Complete;
   }
@@ -67,12 +70,16 @@ struct WorkerState {
   geodesic_draping::Vec2 seedXY;
   double angleDegrees = 0.0;
   ModeState fast;
+  ModeState hybrid;
   ModeState complete;
 };
 
 ModeState& stateForMode(WorkerState& state, const std::string& modeName) {
   if (modeName == "fast") {
     return state.fast;
+  }
+  if (modeName == "hybrid") {
+    return state.hybrid;
   }
   if (modeName == "complete") {
     return state.complete;
