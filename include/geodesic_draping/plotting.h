@@ -27,6 +27,7 @@ void plotGeneratorTraces(const std::array<GeneratorTrace, 4>& traces,
 void plotDrapeComparisonResult(const SurfaceMeshData& mesh,
                                const DrapeResult& completeResult,
                                const DrapeResult& fastResult,
+                               const DrapeResult& overlayResult,
                                const ProjectionPlotOptions& options = {});
 
 } // namespace geodesic_draping

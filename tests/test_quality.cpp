@@ -24,6 +24,9 @@ geodesic_draping::DrapeResult solveFixture(const std::filesystem::path& root,
   const std::filesystem::path fixtureDir = root / name;
   geodesic_draping::DrapeSolveOptions options;
   options.mode = mode;
+  if (mode != geodesic_draping::DrapeSolveMode::Complete) {
+    options.retrieval = geodesic_draping::ResultDomain::Intrinsic;
+  }
   return geodesic_draping::solveDrape(
       geodesic_draping::fixture_io::loadMesh(fixtureDir),
       geodesic_draping::fixture_io::loadSeedXY(fixtureDir),
@@ -57,12 +60,14 @@ void testAspectRatioWarning() {
 
   geodesic_draping::DrapeResult result;
   result.mode = geodesic_draping::DrapeSolveMode::Fast;
-  result.seed.cartesian = {0.1, 0.1, 0.0};
-  for (auto& generator : result.generators) {
-    generator.hitBoundary = true;
-    generator.length = 1.0;
+  result.origin.extrinsicPoint = geodesic_draping::Vec3{0.1, 0.1, 0.0};
+  for (auto& family : result.traces) {
+    family.positive.hitBoundary = true;
+    family.positive.length = 1.0;
+    family.negative.hitBoundary = true;
+    family.negative.length = 1.0;
   }
-  result.faceShearAnglesDegrees = std::vector<double>{0.0, 0.0};
+  result.faceShear = std::vector<double>{0.0, 0.0};
 
   const auto report = geodesic_draping::analyzeSolveQuality(mesh, result);
   assert(report.level != geodesic_draping::SolveQualityLevel::Good);
@@ -72,13 +77,24 @@ void testAspectRatioWarning() {
 void testDemoPartLocalShearWarning(const std::filesystem::path& root) {
   const std::filesystem::path fixtureDir = root / "demo_part";
   const auto mesh = geodesic_draping::fixture_io::loadMesh(fixtureDir);
-  const auto result = solveFixture(root, "demo_part", geodesic_draping::DrapeSolveMode::Fast);
+  geodesic_draping::DrapeSolveOptions options;
+  options.mode = geodesic_draping::DrapeSolveMode::Fast;
+  options.retrieval = geodesic_draping::ResultDomain::Subdivision;
+  options.sampleVertexShear = true;
+  const auto result = geodesic_draping::solveDrape(
+      mesh,
+      geodesic_draping::fixture_io::loadSeedXY(fixtureDir),
+      geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir),
+      fixtureHeatOptions(),
+      options);
+  assert(result.mesh.vertices3D);
+  const geodesic_draping::SurfaceMeshData resultMesh{*result.mesh.vertices3D, result.mesh.faces};
   auto thresholds = geodesic_draping::SolveQualityThresholds{};
   thresholds.localShearJumpMaxWarning = 40.0;
   thresholds.localShearJumpMaxPoor = 1000.0;
   thresholds.localShearJumpP99Warning = 1000.0;
   thresholds.shearMaxMinusP99Warning = 1000.0;
-  const auto report = geodesic_draping::analyzeSolveQuality(mesh, result, thresholds);
+  const auto report = geodesic_draping::analyzeSolveQuality(resultMesh, result, thresholds);
   assert(report.primaryShear.localJumpMax > thresholds.localShearJumpMaxWarning);
   assert(report.level == geodesic_draping::SolveQualityLevel::Warning);
 }
