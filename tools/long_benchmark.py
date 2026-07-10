@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_ROOT = REPO_ROOT.parent / "reference_implementation"
 REFERENCE_SCRIPTS = REPO_ROOT / "test_data" / "scripts"
 DEFAULT_WORKER = REPO_ROOT / "build" / "Release" / "long_benchmark_worker.exe"
-MODES = ("fast", "hybrid", "complete")
+MODES = ("fast", "complete")
 TEMPERATURES = ("cold", "warm")
 
 
@@ -75,15 +75,6 @@ def solve_reference_mode(solver: Any, fixture: dict[str, Any], mode: str) -> str
   if mode == "complete":
     solver.solve(angle=angle, seed_pnt=seed_xy, fast=False)
     return ""
-  if mode == "hybrid":
-    origin_bary, solver.dir_vecs = solver.place_origin(seed_xy, angle)
-    source_curves = solver.trace_generators(origin_bary, solver.dir_vecs)
-    fields = solver.solve_heat(source_curves)
-    vectors = solver.solve_heat_fast(source_curves)
-    solver.surf["dist_0"] = fields[0]
-    solver.surf["dist_1"] = fields[1]
-    solver.add_fields_fast(vectors)
-    return "reference_hybrid_emulated_compute_distance_plus_compute_Y_vertex"
   raise RuntimeError(f"unknown reference mode: {mode}")
 
 
