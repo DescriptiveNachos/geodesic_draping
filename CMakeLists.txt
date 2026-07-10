@@ -238,18 +238,6 @@ target_compile_definitions(profile_signed_heat
   PRIVATE
     GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
 
-add_executable(long_benchmark_worker
-  tools/long_benchmark_worker.cpp)
-target_link_libraries(long_benchmark_worker
-  PRIVATE
-    geodesic_draping)
-target_include_directories(long_benchmark_worker
-  PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools)
-target_compile_definitions(long_benchmark_worker
-  PRIVATE
-    GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
-
 add_executable(debug_intrinsic_subdivision
   tools/debug_intrinsic_subdivision.cpp)
 target_link_libraries(debug_intrinsic_subdivision
