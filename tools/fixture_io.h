@@ -44,67 +44,6 @@ inline std::string arrayTextForKey(const std::string& text, const std::string& k
   throw std::runtime_error("unterminated array for JSON key " + key);
 }
 
-inline std::string objectTextForKey(const std::string& text, const std::string& key) {
-  const std::string quotedKey = "\"" + key + "\"";
-  const size_t keyPos = text.find(quotedKey);
-  if (keyPos == std::string::npos) {
-    throw std::runtime_error("missing JSON key " + key);
-  }
-  const size_t objectStart = text.find('{', keyPos + quotedKey.size());
-  if (objectStart == std::string::npos) {
-    throw std::runtime_error("missing object for JSON key " + key);
-  }
-
-  int depth = 0;
-  for (size_t i = objectStart; i < text.size(); ++i) {
-    if (text[i] == '{') {
-      ++depth;
-    } else if (text[i] == '}') {
-      --depth;
-      if (depth == 0) {
-        return text.substr(objectStart, i - objectStart + 1);
-      }
-    }
-  }
-  throw std::runtime_error("unterminated object for JSON key " + key);
-}
-
-inline std::vector<std::string> arrayTextsForKey(const std::string& text, const std::string& key) {
-  const std::string quotedKey = "\"" + key + "\"";
-  std::vector<std::string> arrays;
-  size_t searchPos = 0;
-  while (true) {
-    const size_t keyPos = text.find(quotedKey, searchPos);
-    if (keyPos == std::string::npos) {
-      break;
-    }
-    const size_t arrayStart = text.find('[', keyPos + quotedKey.size());
-    if (arrayStart == std::string::npos) {
-      throw std::runtime_error("missing array for JSON key " + key);
-    }
-
-    int depth = 0;
-    bool foundEnd = false;
-    for (size_t i = arrayStart; i < text.size(); ++i) {
-      if (text[i] == '[') {
-        ++depth;
-      } else if (text[i] == ']') {
-        --depth;
-        if (depth == 0) {
-          arrays.push_back(text.substr(arrayStart, i - arrayStart + 1));
-          searchPos = i + 1;
-          foundEnd = true;
-          break;
-        }
-      }
-    }
-    if (!foundEnd) {
-      throw std::runtime_error("unterminated array for JSON key " + key);
-    }
-  }
-  return arrays;
-}
-
 inline std::vector<double> numbersInArrayText(const std::string& array) {
   std::vector<double> values;
   const char* cursor = array.c_str();
@@ -125,18 +64,6 @@ inline std::vector<double> numbersInArrayForKey(const std::string& text, const s
   return numbersInArrayText(arrayTextForKey(text, key));
 }
 
-inline std::vector<Vec3> vec3ArraysForKey(const std::string& text, const std::string& key) {
-  std::vector<Vec3> values;
-  for (const std::string& array : arrayTextsForKey(text, key)) {
-    const std::vector<double> numbers = numbersInArrayText(array);
-    if (numbers.size() != 3) {
-      throw std::runtime_error("expected 3 numbers in JSON array for key " + key);
-    }
-    values.emplace_back(numbers[0], numbers[1], numbers[2]);
-  }
-  return values;
-}
-
 inline double numberForKey(const std::string& text, const std::string& key) {
   const std::string quotedKey = "\"" + key + "\"";
   const size_t keyPos = text.find(quotedKey);
@@ -154,31 +81,6 @@ inline double numberForKey(const std::string& text, const std::string& key) {
     throw std::runtime_error("expected numeric JSON value for key " + key);
   }
   return value;
-}
-
-inline std::vector<double> numbersForKey(const std::string& text, const std::string& key) {
-  const std::string quotedKey = "\"" + key + "\"";
-  std::vector<double> values;
-  size_t searchPos = 0;
-  while (true) {
-    const size_t keyPos = text.find(quotedKey, searchPos);
-    if (keyPos == std::string::npos) {
-      break;
-    }
-    const size_t colon = text.find(':', keyPos + quotedKey.size());
-    if (colon == std::string::npos) {
-      throw std::runtime_error("missing JSON value for key " + key);
-    }
-    const char* cursor = text.c_str() + colon + 1;
-    char* end = nullptr;
-    const double value = std::strtod(cursor, &end);
-    if (end == cursor) {
-      throw std::runtime_error("expected numeric JSON value for key " + key);
-    }
-    values.push_back(value);
-    searchPos = static_cast<size_t>(end - text.c_str());
-  }
-  return values;
 }
 
 inline SurfaceMeshData loadMesh(const std::filesystem::path& fixtureDir) {
@@ -215,107 +117,6 @@ inline Vec2 loadSeedXY(const std::filesystem::path& fixtureDir) {
 
 inline double loadAngleDegrees(const std::filesystem::path& fixtureDir) {
   return numberForKey(readText(fixtureDir / "inputs.json"), "angle_degrees");
-}
-
-inline Vec3 loadGoldenOrigin(const std::filesystem::path& fixtureDir) {
-  const std::vector<double> values =
-      numbersInArrayForKey(readText(fixtureDir / "golden.json"), "origin_cartesian");
-  if (values.size() != 3) {
-    throw std::runtime_error("origin_cartesian must have three entries");
-  }
-  return Vec3(values[0], values[1], values[2]);
-}
-
-inline size_t loadGoldenSeedFaceIndex(const std::filesystem::path& fixtureDir) {
-  return static_cast<size_t>(numberForKey(readText(fixtureDir / "golden.json"), "face_index"));
-}
-
-inline Vec3 loadGoldenSeedBarycentric(const std::filesystem::path& fixtureDir) {
-  const std::vector<double> values = numbersInArrayForKey(readText(fixtureDir / "golden.json"), "barycentric");
-  if (values.size() != 3) {
-    throw std::runtime_error("seed barycentric must have three entries");
-  }
-  return Vec3(values[0], values[1], values[2]);
-}
-
-inline std::vector<Vec3> loadGoldenDirections(const std::filesystem::path& fixtureDir) {
-  const std::vector<double> values = numbersInArrayForKey(readText(fixtureDir / "golden.json"), "directions");
-  if (values.size() != 12) {
-    throw std::runtime_error("directions must be four 3D vectors");
-  }
-  std::vector<Vec3> directions;
-  for (size_t i = 0; i < values.size(); i += 3) {
-    directions.emplace_back(values[i], values[i + 1], values[i + 2]);
-  }
-  return directions;
-}
-
-inline std::vector<Vec3> loadGoldenGeneratorLastPoints(const std::filesystem::path& fixtureDir) {
-  return vec3ArraysForKey(readText(fixtureDir / "golden.json"), "last_point");
-}
-
-inline std::vector<size_t> loadGoldenGeneratorPointCounts(const std::filesystem::path& fixtureDir) {
-  const std::vector<double> values = numbersForKey(readText(fixtureDir / "golden.json"), "num_points");
-  std::vector<size_t> counts;
-  for (size_t i = 0; i < values.size() && i < 4; ++i) {
-    counts.push_back(static_cast<size_t>(values[i]));
-  }
-  if (counts.size() != 4) {
-    throw std::runtime_error("expected four generator num_points entries");
-  }
-  return counts;
-}
-
-inline std::vector<size_t> loadGoldenPairedGeneratorPointCounts(const std::filesystem::path& fixtureDir) {
-  const std::vector<double> values = numbersForKey(readText(fixtureDir / "golden.json"), "num_points");
-  if (values.size() < 6) {
-    throw std::runtime_error("expected four trace counts and two paired generator counts");
-  }
-  return {
-      static_cast<size_t>(values[4]),
-      static_cast<size_t>(values[5]),
-  };
-}
-
-inline std::vector<double> loadGoldenScalarArray(const std::filesystem::path& fixtureDir,
-                                                 const std::string& key) {
-  return numbersInArrayForKey(readText(fixtureDir / "golden.json"), key);
-}
-
-inline std::vector<Vec3> loadGoldenVectorArray(const std::filesystem::path& fixtureDir,
-                                               const std::string& key) {
-  const std::vector<double> values = numbersInArrayForKey(readText(fixtureDir / "golden.json"), key);
-  if (values.size() % 3 != 0) {
-    throw std::runtime_error("expected vector array triples for key " + key);
-  }
-  std::vector<Vec3> vectors;
-  vectors.reserve(values.size() / 3);
-  for (size_t i = 0; i < values.size(); i += 3) {
-    vectors.emplace_back(values[i], values[i + 1], values[i + 2]);
-  }
-  return vectors;
-}
-
-inline std::vector<Vec3> loadGoldenVectorArray(const std::filesystem::path& fixtureDir,
-                                               const std::string& section,
-                                               const std::string& key) {
-  const std::string sectionText = objectTextForKey(readText(fixtureDir / "golden.json"), section);
-  const std::vector<double> values = numbersInArrayForKey(sectionText, key);
-  if (values.size() % 3 != 0) {
-    throw std::runtime_error("expected vector array triples for key " + section + "." + key);
-  }
-  std::vector<Vec3> vectors;
-  vectors.reserve(values.size() / 3);
-  for (size_t i = 0; i < values.size(); i += 3) {
-    vectors.emplace_back(values[i], values[i + 1], values[i + 2]);
-  }
-  return vectors;
-}
-
-inline std::vector<double> loadGoldenShearArray(const std::filesystem::path& fixtureDir,
-                                                const std::string& key) {
-  const std::string sectionText = objectTextForKey(readText(fixtureDir / "golden.json"), "shear");
-  return numbersInArrayForKey(sectionText, key);
 }
 
 } // namespace geodesic_draping::fixture_io
