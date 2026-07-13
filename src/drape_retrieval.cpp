@@ -5,6 +5,8 @@
 #include "geometrycentral/surface/common_subdivision.h"
 #include "geometrycentral/surface/transfer_functions.h"
 
+#include <Eigen/Dense>
+
 #include <cmath>
 #include <stdexcept>
 
@@ -144,6 +146,68 @@ gcs::VertexData<geometrycentral::Vector3> subdivisionVertexPositions(
   return positions;
 }
 
+geometrycentral::Vector3 barycentricDisplacementToSubdivisionVector(
+    gcs::CommonSubdivision& subdivision,
+    gcs::VertexPositionGeometry& inputGeometry,
+    gcs::Face subdivisionFace,
+    gcs::Face intrinsicFace,
+    const geometrycentral::Vector3& barycentricDisplacement) {
+  Eigen::Matrix3d barycentricBasis;
+  Eigen::Matrix<double, 3, 3> positionBasis;
+
+  size_t i = 0;
+  for (gcs::Vertex vertex : subdivisionFace.adjacentVertices()) {
+    if (i >= 3) {
+      throw std::runtime_error("subdivision vector transfer expects triangular faces");
+    }
+    const gcs::SurfacePoint pointOnIntrinsic =
+        subdivision.sourcePoints[vertex]->posB.inFace(intrinsicFace);
+    const geometrycentral::Vector3 pointOnInput =
+        subdivision.sourcePoints[vertex]->posA.interpolate(inputGeometry.vertexPositions);
+
+    barycentricBasis(0, i) = pointOnIntrinsic.faceCoords.x;
+    barycentricBasis(1, i) = pointOnIntrinsic.faceCoords.y;
+    barycentricBasis(2, i) = pointOnIntrinsic.faceCoords.z;
+
+    positionBasis(0, i) = pointOnInput.x;
+    positionBasis(1, i) = pointOnInput.y;
+    positionBasis(2, i) = pointOnInput.z;
+    ++i;
+  }
+  if (i != 3) {
+    throw std::runtime_error("subdivision vector transfer expects triangular faces");
+  }
+
+  const Eigen::Vector3d displacement(
+      barycentricDisplacement.x,
+      barycentricDisplacement.y,
+      barycentricDisplacement.z);
+  // The heat field stores a barycentric displacement on the intrinsic source
+  // face; map that displacement through the local affine common-subdivision
+  // face before exposing it as a drawable 3D vector.
+  const Eigen::Vector3d subdivisionWeights =
+      barycentricBasis.colPivHouseholderQr().solve(displacement);
+  const Eigen::Vector3d vector = positionBasis * subdivisionWeights;
+  return normalized(geometrycentral::Vector3{vector.x(), vector.y(), vector.z()});
+}
+
+gcs::FaceData<geometrycentral::Vector3> subdivisionDirectionField(
+    gcs::CommonSubdivision& subdivision,
+    gcs::VertexPositionGeometry& inputGeometry,
+    const FaceHeatDirectionField& intrinsicDirections) {
+  gcs::FaceData<geometrycentral::Vector3> field(*subdivision.mesh);
+  for (gcs::Face face : subdivision.mesh->faces()) {
+    const gcs::Face intrinsicFace = subdivision.sourceFaceB[face];
+    field[face] = barycentricDisplacementToSubdivisionVector(
+        subdivision,
+        inputGeometry,
+        face,
+        intrinsicFace,
+        intrinsicDirections[intrinsicFace.getIndex()]);
+  }
+  return field;
+}
+
 } // namespace
 
 DrapeResult GeoDrapeSolver::retrieveIntrinsic(bool sampleVertexShear) const {
@@ -234,13 +298,9 @@ DrapeResult GeoDrapeSolver::retrieveSubdivision(bool sampleVertexShear) const {
       core.generators);
   result.extrinsicDirections = directionsFromExtrinsicTraces(*result.extrinsicSeed, *result.extrinsicGenerators);
 
-  const gcs::FaceData<geometrycentral::Vector3> intrinsicDirections0 =
-      toFaceData(intrinsicMesh, core.directions[0]);
-  const gcs::FaceData<geometrycentral::Vector3> intrinsicDirections1 =
-      toFaceData(intrinsicMesh, core.directions[1]);
   result.directionFields = {
-      subdivision.copyFromB(intrinsicDirections0),
-      subdivision.copyFromB(intrinsicDirections1),
+      subdivisionDirectionField(subdivision, *inputSurface_.geometry, core.directions[0]),
+      subdivisionDirectionField(subdivision, *inputSurface_.geometry, core.directions[1]),
   };
 
   if (core.distances) {
