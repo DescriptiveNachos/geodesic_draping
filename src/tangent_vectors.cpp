@@ -1,7 +1,5 @@
 #include "geodrape_internal.h"
 
-#include "geodesic_draping/signed_heat.h"
-
 #include "geometrycentral/surface/trace_geodesic.h"
 
 #include <algorithm>

@@ -32,17 +32,11 @@ gcs::SurfacePoint inputToIntrinsic(
     bool useCommonSubdivisionInputAdapter);
 
 gcs::SurfacePoint toFaceSurfacePoint(gcs::SurfaceMesh& mesh, const BarycentricPoint& point);
+Vec3 interpolateSurfacePoint(const gcs::SurfacePoint& point,
+                             gcs::VertexPositionGeometry& geometry);
 
 gcs::BarycentricVector normalizeVector(gcs::BarycentricVector vector,
                                        gcs::IntrinsicGeometryInterface& geometry);
-gcs::BarycentricVector toBarycentricVector(gcs::SurfaceMesh& mesh,
-                                           const TangentVectorRef& ref);
-TangentVectorRef toTangentVectorRef(const gcs::BarycentricVector& vector);
-std::array<Vec3, 4> cartesianDirectionsFromIntrinsic(
-    gcs::VertexPositionGeometry& inputGeometry,
-    gcs::IntrinsicTriangulation& triangulation,
-    const gcs::SurfacePoint& seed,
-    const std::array<gcs::BarycentricVector, 4>& directions);
 gcs::BarycentricVector intrinsicDirectionFromFabricAngle(const SurfaceMeshData& meshData,
                                                         gcs::VertexPositionGeometry& inputGeometry,
                                                         gcs::IntrinsicTriangulation& triangulation,
@@ -70,32 +64,5 @@ FaceHeatDirectionField computeIntrinsicFaceScalarGradients(
 std::vector<double> averageIntrinsicFaceScalarsToVertices(
     gcs::SurfaceMesh& mesh,
     const std::vector<double>& faceScalars);
-
-// API/result transfer helpers.
-SeedProjection toExtrinsicSeed(gcs::VertexPositionGeometry& inputGeometry,
-                               gcs::IntrinsicTriangulation& triangulation,
-                               const gcs::SurfacePoint& intrinsicSeed);
-std::vector<double> restrictVertexScalarsToInput(
-    gcs::IntrinsicTriangulation& triangulation,
-    const std::vector<double>& valuesOnIntrinsic);
-
-ResultMesh makeExtrinsicResultMesh(const SurfaceMeshData& meshData);
-ResultMesh makeIntrinsicResultMesh(gcs::SurfaceMesh& mesh,
-                                   gcs::IntrinsicGeometryInterface& geometry);
-ResultMesh makeSubdivisionResultMesh(gcs::CommonSubdivision& subdivision,
-                                     gcs::VertexPositionGeometry& inputGeometry);
-std::array<TraceFamily, 2> makeTraceFamilies(
-    gcs::VertexPositionGeometry& inputGeometry,
-    gcs::IntrinsicTriangulation& triangulation,
-    const std::array<IntrinsicGeneratorTrace, 4>& generators,
-    ResultDomain domain);
-
-std::vector<double> vertexDataToVector(const gcs::VertexData<double>& values);
-std::vector<double> faceDataToVector(const gcs::FaceData<double>& values);
-FaceHeatDirectionField faceVectorDataToVector(const gcs::FaceData<geometrycentral::Vector3>& values);
-gcs::VertexData<double> activeVertexData(gcs::SurfaceMesh& mesh, const std::vector<double>& values);
-gcs::FaceData<double> activeFaceData(gcs::SurfaceMesh& mesh, const std::vector<double>& values);
-gcs::FaceData<geometrycentral::Vector3> activeFaceVectorData(gcs::SurfaceMesh& mesh,
-                                                             const FaceHeatDirectionField& values);
 
 } // namespace geodesic_draping

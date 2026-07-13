@@ -32,9 +32,9 @@ GeoDrapeSolver::GeoDrapeSolver(SurfaceMeshData meshData,
       heatOptions_.diffusionTimeCoefficient);
 }
 
-DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
-                                  double fabricAngle,
-                                  const DrapeSolveOptions& solveOptions) {
+const CoreIntrinsicResult& GeoDrapeSolver::solve(const Vec2& seedXY,
+                                                 double fabricAngle,
+                                                 const DrapeSolveOptions& solveOptions) {
   const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
   const IntrinsicSolveInput input = adaptExtrinsicInput(
       seedXY,
@@ -43,28 +43,14 @@ DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
       solveOptions.mode,
       trace);
   lastIntrinsicResult_ = solveCore(input);
-  return retrieveFromCore(
-      *lastIntrinsicResult_,
-      solveOptions.retrieval,
-      solveOptions.sampleVertexShear);
+  return *lastIntrinsicResult_;
 }
 
-DrapeResult GeoDrapeSolver::solveFromIntrinsic(const SurfaceReference& seed,
-                                               const TangentVectorRef& fabricDirection,
-                                               double fiberAngle,
-                                               const DrapeSolveOptions& solveOptions) {
-  gcs::SurfacePoint intrinsicSeed =
-      toGeometryCentralSurfacePoint(*intrinsicTriangulation_->intrinsicMesh, seed).inSomeFace();
-  gcs::BarycentricVector direction0 = normalizeVector(
-      toBarycentricVector(*intrinsicTriangulation_->intrinsicMesh, fabricDirection).inFace(intrinsicSeed.face),
-      *intrinsicTriangulation_);
-  return solveFromIntrinsic(intrinsicSeed, direction0, fiberAngle, solveOptions);
-}
-
-DrapeResult GeoDrapeSolver::solveFromIntrinsic(const gcs::SurfacePoint& seed,
-                                               const gcs::BarycentricVector& fabricDirection,
-                                               double fiberAngle,
-                                               const DrapeSolveOptions& solveOptions) {
+const CoreIntrinsicResult& GeoDrapeSolver::solveFromIntrinsic(
+    const gcs::SurfacePoint& seed,
+    const gcs::BarycentricVector& fabricDirection,
+    double fiberAngle,
+    const DrapeSolveOptions& solveOptions) {
   const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
   const gcs::SurfacePoint intrinsicSeed = seed.inSomeFace();
   const gcs::BarycentricVector direction0 = normalizeVector(
@@ -81,14 +67,14 @@ DrapeResult GeoDrapeSolver::solveFromIntrinsic(const gcs::SurfacePoint& seed,
   input.trace = trace;
 
   lastIntrinsicResult_ = solveCore(input);
-  return retrieveFromCore(*lastIntrinsicResult_, solveOptions.retrieval, solveOptions.sampleVertexShear);
+  return *lastIntrinsicResult_;
 }
 
-DrapeResult GeoDrapeSolver::retrieve(ResultDomain retrieval, bool sampleVertexShear) {
+const CoreIntrinsicResult& GeoDrapeSolver::lastResult() const {
   if (!lastIntrinsicResult_) {
-    throw std::runtime_error("GeoDrapeSolver::retrieve() requires a previous solve");
+    throw std::runtime_error("GeoDrapeSolver::lastResult() requires a previous solve");
   }
-  return retrieveFromCore(*lastIntrinsicResult_, retrieval, sampleVertexShear);
+  return *lastIntrinsicResult_;
 }
 
 IntrinsicSolveInput GeoDrapeSolver::adaptExtrinsicInput(const Vec2& seedXY,
@@ -174,15 +160,6 @@ CoreIntrinsicResult GeoDrapeSolver::solveCore(const IntrinsicSolveInput& input) 
       result.directions[0],
       result.directions[1]);
   return result;
-}
-
-DrapeResult solveDrape(const SurfaceMeshData& mesh,
-                       const Vec2& seedXY,
-                       double fabricAngle,
-                       const SignedHeatSolveOptions& heatOptions,
-                       const DrapeSolveOptions& solveOptions) {
-  GeoDrapeSolver solver(mesh, heatOptions);
-  return solver.solve(seedXY, fabricAngle, solveOptions);
 }
 
 } // namespace geodesic_draping

@@ -1,6 +1,8 @@
 #pragma once
 
-#include "geodesic_draping/signed_heat.h"
+#include "geodesic_draping/geometrycentral_adapter.h"
+
+#include "geometrycentral/surface/signed_heat_method.h"
 
 #include <array>
 #include <complex>
@@ -17,8 +19,15 @@ enum class VertexDirectionAveraging {
   CornerAngle,
 };
 
+struct SignedHeatSolveOptions {
+  bool preserveSourceNormals = false;
+  geometrycentral::LevelSetConstraint levelSetConstraint = geometrycentral::LevelSetConstraint::None;
+  double softLevelSetWeight = -1.0;
+  double diffusionTimeCoefficient = 1.0;
+};
+
 struct DiffusedHeatFieldResult {
-  std::vector<geometrycentral::surface::Curve> preprocessedSourceCurves;
+  std::vector<geometrycentral::surface::Curve> preprocessedCurves;
   EdgeHeatField sourceEdgeHeatField;
   EdgeHeatField diffusedEdgeHeatField;
 };
@@ -56,20 +65,11 @@ public:
   DiffusedHeatFieldResult solveDiffusedEdgeHeatField(
       const geometrycentral::surface::Curve& sourceCurve,
       const SignedHeatSolveOptions& options = {});
-  DiffusedHeatFieldResult solveDiffusedEdgeHeatField(
-      const std::vector<SurfaceReference>& sourceCurve,
-      const SignedHeatSolveOptions& options = {});
 
   CustomSignedHeatResult solve(const geometrycentral::surface::Curve& sourceCurve,
                                const SignedHeatSolveOptions& options = {},
                                bool computeDistance = false);
-  CustomSignedHeatResult solve(const std::vector<SurfaceReference>& sourceCurve,
-                               const SignedHeatSolveOptions& options = {},
-                               bool computeDistance = false);
   TimedCustomSignedHeatResult solveTimed(const geometrycentral::surface::Curve& sourceCurve,
-                                         const SignedHeatSolveOptions& options = {},
-                                         bool computeDistance = false);
-  TimedCustomSignedHeatResult solveTimed(const std::vector<SurfaceReference>& sourceCurve,
                                          const SignedHeatSolveOptions& options = {},
                                          bool computeDistance = false);
 
@@ -77,16 +77,10 @@ public:
       const std::array<geometrycentral::surface::Curve, 2>& sourceCurves,
       const SignedHeatSolveOptions& options = {},
       bool computeDistance = false);
-  std::array<CustomSignedHeatResult, 2> solve(const SourceCurves& sourceCurves,
-                                              const SignedHeatSolveOptions& options = {},
-                                              bool computeDistance = false);
   std::array<TimedCustomSignedHeatResult, 2> solveTimed(
       const std::array<geometrycentral::surface::Curve, 2>& sourceCurves,
       const SignedHeatSolveOptions& options = {},
       bool computeDistance = false);
-  std::array<TimedCustomSignedHeatResult, 2> solveTimed(const SourceCurves& sourceCurves,
-                                                        const SignedHeatSolveOptions& options = {},
-                                                        bool computeDistance = false);
 
 private:
   geometrycentral::surface::SurfaceMesh& mesh_;
@@ -153,13 +147,5 @@ std::vector<double> computeFaceShearAnglesDegrees(
     geometrycentral::surface::IntrinsicGeometryInterface& geometry,
     const FaceHeatDirectionField& normalizedFaceDirections0,
     const FaceHeatDirectionField& normalizedFaceDirections1);
-
-CustomSignedHeatResult computeCustomSignedHeat(GeometryCentralSurface& surface,
-                                                         const std::vector<SurfaceReference>& sourceCurve,
-                                                         const SignedHeatSolveOptions& options = {});
-
-std::array<CustomSignedHeatResult, 2> computeCustomSignedHeat(GeometryCentralSurface& surface,
-                                                                        const SourceCurves& sourceCurves,
-                                                                        const SignedHeatSolveOptions& options = {});
 
 } // namespace geodesic_draping

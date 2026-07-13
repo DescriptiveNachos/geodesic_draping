@@ -4,8 +4,8 @@ project(geodesic_draping
   VERSION 0.1.0
   LANGUAGES CXX)
 
-option(GEODESIC_DRAPING_BUILD_TESTS "Build geodesic draping tests" ON)
-option(GEODESIC_DRAPING_ENABLE_POLYSCOPE "Enable optional Polyscope plotting helpers" ON)
+option(GEODESIC_DRAPING_BUILD_TESTS "Build geodesic draping tests" OFF)
+option(GEODESIC_DRAPING_ENABLE_POLYSCOPE "Enable optional Polyscope plotting helpers" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,23 +19,14 @@ if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
 endif()
 
 add_library(geodesic_draping
-  src/common_subdivision_debug.cpp
-  src/diagnostics.cpp
-  src/drape_retrieval.cpp
   src/field_algorithms.cpp
-  src/field_processing.cpp
   src/field_sampling.cpp
-  src/field_transfer.cpp
   src/geodrape.cpp
   src/geometrycentral_adapter.cpp
   src/generator_tracing.cpp
   src/intrinsic_domain.cpp
-  src/plotting.cpp
-  src/quality.cpp
   src/seed_projection.cpp
-  src/signed_heat.cpp
   src/custom_signed_heat.cpp
-  src/tangent_vector_transfer.cpp
   src/tangent_vectors.cpp
   src/version.cpp)
 

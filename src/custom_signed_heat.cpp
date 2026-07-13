@@ -108,23 +108,11 @@ DiffusedHeatFieldResult CustomSignedHeatSolver::solveDiffusedEdgeHeatField(
   const std::vector<gcs::Curve> preprocessedCurves = preprocessCurves({sourceCurve});
 
   DiffusedHeatFieldResult result;
-  result.preprocessedSourceCurves = preprocessedCurves;
+  result.preprocessedCurves = preprocessedCurves;
   result.sourceEdgeHeatField = buildSourceEdgeHeatField(preprocessedCurves);
   result.diffusedEdgeHeatField =
       diffuseEdgeHeatField(result.sourceEdgeHeatField, preprocessedCurves, options);
   return result;
-}
-
-CustomSignedHeatResult CustomSignedHeatSolver::solve(const std::vector<SurfaceReference>& sourceCurve,
-                                                     const SignedHeatSolveOptions& options,
-                                                     bool computeDistance) {
-  return solve(toGeometryCentralCurve(mesh_, sourceCurve, true), options, computeDistance);
-}
-
-DiffusedHeatFieldResult CustomSignedHeatSolver::solveDiffusedEdgeHeatField(
-    const std::vector<SurfaceReference>& sourceCurve,
-    const SignedHeatSolveOptions& options) {
-  return solveDiffusedEdgeHeatField(toGeometryCentralCurve(mesh_, sourceCurve, true), options);
 }
 
 CustomSignedHeatResult CustomSignedHeatSolver::solve(const gcs::Curve& sourceCurve,
@@ -136,17 +124,10 @@ CustomSignedHeatResult CustomSignedHeatSolver::solve(const gcs::Curve& sourceCur
   if (computeDistance) {
     result.distance = integrateVectorFieldToDistance(
         result.normalizedFaceDirections,
-        result.diffusion.preprocessedSourceCurves,
+        result.diffusion.preprocessedCurves,
         options);
   }
   return result;
-}
-
-TimedCustomSignedHeatResult CustomSignedHeatSolver::solveTimed(
-    const std::vector<SurfaceReference>& sourceCurve,
-    const SignedHeatSolveOptions& options,
-    bool computeDistance) {
-  return solveTimed(toGeometryCentralCurve(mesh_, sourceCurve, true), options, computeDistance);
 }
 
 TimedCustomSignedHeatResult CustomSignedHeatSolver::solveTimed(
@@ -166,7 +147,7 @@ TimedCustomSignedHeatResult CustomSignedHeatSolver::solveTimed(
   const std::vector<gcs::Curve> preprocessedCurves = preprocessCurves({curve});
   timed.timings.preprocessSeconds = secondsSince(phaseStart);
 
-  timed.result.diffusion.preprocessedSourceCurves = preprocessedCurves;
+  timed.result.diffusion.preprocessedCurves = preprocessedCurves;
 
   phaseStart = Clock::now();
   timed.result.diffusion.sourceEdgeHeatField = buildSourceEdgeHeatField(preprocessedCurves);
@@ -193,16 +174,6 @@ TimedCustomSignedHeatResult CustomSignedHeatSolver::solveTimed(
   return timed;
 }
 
-std::array<CustomSignedHeatResult, 2> CustomSignedHeatSolver::solve(const SourceCurves& sourceCurves,
-                                                                    const SignedHeatSolveOptions& options,
-                                                                    bool computeDistance) {
-  std::array<gcs::Curve, 2> curves;
-  for (size_t i = 0; i < curves.size(); ++i) {
-    curves[i] = toGeometryCentralCurve(mesh_, sourceCurves.curves[i], true);
-  }
-  return solve(curves, options, computeDistance);
-}
-
 std::array<CustomSignedHeatResult, 2> CustomSignedHeatSolver::solve(
     const std::array<gcs::Curve, 2>& sourceCurves,
     const SignedHeatSolveOptions& options,
@@ -212,17 +183,6 @@ std::array<CustomSignedHeatResult, 2> CustomSignedHeatSolver::solve(
     results[i] = solve(sourceCurves[i], options, computeDistance);
   }
   return results;
-}
-
-std::array<TimedCustomSignedHeatResult, 2> CustomSignedHeatSolver::solveTimed(
-    const SourceCurves& sourceCurves,
-    const SignedHeatSolveOptions& options,
-    bool computeDistance) {
-  std::array<gcs::Curve, 2> curves;
-  for (size_t i = 0; i < curves.size(); ++i) {
-    curves[i] = toGeometryCentralCurve(mesh_, sourceCurves.curves[i], true);
-  }
-  return solveTimed(curves, options, computeDistance);
 }
 
 std::array<TimedCustomSignedHeatResult, 2> CustomSignedHeatSolver::solveTimed(
@@ -807,20 +767,6 @@ std::vector<double> computeFaceShearAnglesDegrees(
     shear[face.getIndex()] = std::abs((theta * 180.0 / pi) - 90.0);
   }
   return shear;
-}
-
-CustomSignedHeatResult computeCustomSignedHeat(GeometryCentralSurface& surface,
-                                               const std::vector<SurfaceReference>& sourceCurve,
-                                               const SignedHeatSolveOptions& options) {
-  CustomSignedHeatSolver solver(surface, options.diffusionTimeCoefficient);
-  return solver.solve(sourceCurve, options, false);
-}
-
-std::array<CustomSignedHeatResult, 2> computeCustomSignedHeat(GeometryCentralSurface& surface,
-                                                                        const SourceCurves& sourceCurves,
-                                                                        const SignedHeatSolveOptions& options) {
-  CustomSignedHeatSolver solver(surface, options.diffusionTimeCoefficient);
-  return solver.solve(sourceCurves, options, false);
 }
 
 } // namespace geodesic_draping
