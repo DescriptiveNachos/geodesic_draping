@@ -22,7 +22,7 @@ add_library(geodesic_draping
   src/field_algorithms.cpp
   src/field_sampling.cpp
   src/geodrape.cpp
-  src/geometrycentral_adapter.cpp
+  src/surface_construction.cpp
   src/generator_tracing.cpp
   src/intrinsic_domain.cpp
   src/seed_projection.cpp

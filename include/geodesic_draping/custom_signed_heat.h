@@ -1,6 +1,6 @@
 #pragma once
 
-#include "geodesic_draping/geometrycentral_adapter.h"
+#include "geodesic_draping/surface_construction.h"
 
 #include "geometrycentral/surface/signed_heat_method.h"
 

@@ -1,4 +1,4 @@
-#include "geodesic_draping/geometrycentral_adapter.h"
+#include "geodesic_draping/surface_construction.h"
 
 #include <Eigen/Dense>
 
