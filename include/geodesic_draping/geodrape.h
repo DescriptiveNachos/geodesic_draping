@@ -2,6 +2,7 @@
 
 #include "geodesic_draping/custom_signed_heat.h"
 #include "geodesic_draping/seed_projection.h"
+#include "geodesic_draping/surface_construction.h"
 
 #include "geometrycentral/surface/intrinsic_triangulation.h"
 #include "geometrycentral/surface/barycentric_vector.h"

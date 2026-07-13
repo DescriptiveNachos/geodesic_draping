@@ -4,7 +4,6 @@
 #include "geometrycentral/surface/barycentric_vector.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -14,12 +13,6 @@ namespace gc = geometrycentral;
 namespace gcs = geometrycentral::surface;
 
 namespace {
-
-using Clock = std::chrono::steady_clock;
-
-double secondsSince(const Clock::time_point& start) {
-  return std::chrono::duration<double>(Clock::now() - start).count();
-}
 
 gc::Vector<std::complex<double>> toEigenVector(const EdgeHeatField& values) {
   gc::Vector<std::complex<double>> out(values.size());
@@ -37,46 +30,11 @@ EdgeHeatField toStdVector(const gc::Vector<std::complex<double>>& values) {
   return out;
 }
 
-Vec3 fromGcVector3(const gc::Vector3& value) {
-  return Vec3(value.x, value.y, value.z);
-}
-
 Eigen::Index eigenIndex(size_t value) {
   return static_cast<Eigen::Index>(value);
 }
 
-gc::Vector3 faceVectorToExtrinsic(const gcs::Face& face,
-                                  const gc::Vector3& coords,
-                                  gcs::VertexPositionGeometry& geometry) {
-  gc::Vector3 vector{0.0, 0.0, 0.0};
-  size_t localIndex = 0;
-  for (gcs::Vertex vertex : face.adjacentVertices()) {
-    const double coefficient = localIndex == 0 ? coords.x : (localIndex == 1 ? coords.y : coords.z);
-    vector += coefficient * geometry.vertexPositions[vertex];
-    ++localIndex;
-  }
-  return vector;
-}
-
-gcs::SurfaceMesh& requireMesh(GeometryCentralSurface& surface) {
-  if (!surface.mesh) {
-    throw std::runtime_error("CustomSignedHeatSolver requires a valid geometry-central mesh");
-  }
-  return *surface.mesh;
-}
-
-gcs::IntrinsicGeometryInterface& requireGeometry(GeometryCentralSurface& surface) {
-  if (!surface.geometry) {
-    throw std::runtime_error("CustomSignedHeatSolver requires a valid geometry-central geometry");
-  }
-  return *surface.geometry;
-}
-
 } // namespace
-
-CustomSignedHeatSolver::CustomSignedHeatSolver(GeometryCentralSurface& surface,
-                                               double diffusionTimeCoefficient)
-    : CustomSignedHeatSolver(requireMesh(surface), requireGeometry(surface), diffusionTimeCoefficient) {}
 
 CustomSignedHeatSolver::CustomSignedHeatSolver(gcs::SurfaceMesh& mesh,
                                                gcs::IntrinsicGeometryInterface& geometry,
@@ -130,50 +88,6 @@ CustomSignedHeatResult CustomSignedHeatSolver::solve(const gcs::Curve& sourceCur
   return result;
 }
 
-TimedCustomSignedHeatResult CustomSignedHeatSolver::solveTimed(
-    const gcs::Curve& sourceCurve,
-    const SignedHeatSolveOptions& options,
-    bool computeDistance) {
-  TimedCustomSignedHeatResult timed;
-  timed.timings.heatSolverAlreadyInitialized = static_cast<bool>(heatFieldSolver_);
-  timed.timings.poissonSolverAlreadyInitialized = static_cast<bool>(poissonSolver_);
-  const auto totalStart = Clock::now();
-
-  auto phaseStart = Clock::now();
-  const gcs::Curve curve = sourceCurve;
-  timed.timings.curveConversionSeconds = secondsSince(phaseStart);
-
-  phaseStart = Clock::now();
-  const std::vector<gcs::Curve> preprocessedCurves = preprocessCurves({curve});
-  timed.timings.preprocessSeconds = secondsSince(phaseStart);
-
-  timed.result.diffusion.preprocessedCurves = preprocessedCurves;
-
-  phaseStart = Clock::now();
-  timed.result.diffusion.sourceEdgeHeatField = buildSourceEdgeHeatField(preprocessedCurves);
-  timed.timings.sourceSeconds = secondsSince(phaseStart);
-
-  phaseStart = Clock::now();
-  timed.result.diffusion.diffusedEdgeHeatField =
-      diffuseEdgeHeatField(timed.result.diffusion.sourceEdgeHeatField, preprocessedCurves, options);
-  timed.timings.diffuseSeconds = secondsSince(phaseStart);
-
-  phaseStart = Clock::now();
-  timed.result.normalizedFaceDirections =
-      sampleAndNormalizeFaceDirections(timed.result.diffusion.diffusedEdgeHeatField);
-  timed.timings.normalizeSeconds = secondsSince(phaseStart);
-
-  if (computeDistance) {
-    phaseStart = Clock::now();
-    timed.result.distance =
-        integrateVectorFieldToDistance(timed.result.normalizedFaceDirections, preprocessedCurves, options);
-    timed.timings.distanceSeconds = secondsSince(phaseStart);
-  }
-
-  timed.timings.totalSeconds = secondsSince(totalStart);
-  return timed;
-}
-
 std::array<CustomSignedHeatResult, 2> CustomSignedHeatSolver::solve(
     const std::array<gcs::Curve, 2>& sourceCurves,
     const SignedHeatSolveOptions& options,
@@ -181,17 +95,6 @@ std::array<CustomSignedHeatResult, 2> CustomSignedHeatSolver::solve(
   std::array<CustomSignedHeatResult, 2> results;
   for (size_t i = 0; i < results.size(); ++i) {
     results[i] = solve(sourceCurves[i], options, computeDistance);
-  }
-  return results;
-}
-
-std::array<TimedCustomSignedHeatResult, 2> CustomSignedHeatSolver::solveTimed(
-    const std::array<gcs::Curve, 2>& sourceCurves,
-    const SignedHeatSolveOptions& options,
-    bool computeDistance) {
-  std::array<TimedCustomSignedHeatResult, 2> results;
-  for (size_t i = 0; i < results.size(); ++i) {
-    results[i] = solveTimed(sourceCurves[i], options, computeDistance);
   }
   return results;
 }
@@ -669,71 +572,6 @@ double CustomSignedHeatSolver::averageValueOnSource(const gc::Vector<double>& ph
     return 0.0;
   }
   return shift / normalization;
-}
-
-FaceHeatDirectionField sampleAndNormalizeFaceDirections(GeometryCentralSurface& surface,
-                                                        const EdgeHeatField& diffusedEdgeHeatField) {
-  auto& mesh = *surface.mesh;
-  auto& geometry = *surface.geometry;
-  if (diffusedEdgeHeatField.size() != mesh.nEdges()) {
-    throw std::runtime_error("sampleAndNormalizeFaceDirections requires one heat-field value per edge");
-  }
-
-  geometry.requireEdgeIndices();
-  FaceHeatDirectionField normalized(mesh.nFaces(), gc::Vector3{0.0, 0.0, 0.0});
-  for (gcs::Face face : mesh.faces()) {
-    gc::Vector3 faceCoords = {0.0, 0.0, 0.0};
-    for (gcs::Halfedge halfedge : face.adjacentHalfedges()) {
-      const size_t eIdx = geometry.edgeIndices[halfedge.edge()];
-      gcs::BarycentricVector e1(halfedge, face);
-      if (!halfedge.orientation()) {
-        e1 *= -1.0;
-      }
-      gcs::BarycentricVector e2 = e1.rotate90(geometry);
-      e1 /= e1.norm(geometry);
-      e2 /= e2.norm(geometry);
-      faceCoords += std::real(diffusedEdgeHeatField[eIdx]) * e1.faceCoords;
-      faceCoords += std::imag(diffusedEdgeHeatField[eIdx]) * e2.faceCoords;
-    }
-    gcs::BarycentricVector vector(face, faceCoords);
-    const double magnitude = vector.norm(geometry);
-    if (magnitude != 0.0) {
-      faceCoords = (vector / magnitude).faceCoords;
-    } else {
-      faceCoords = {0.0, 0.0, 0.0};
-    }
-    normalized[face.getIndex()] = faceCoords;
-  }
-  geometry.unrequireEdgeIndices();
-  return normalized;
-}
-
-std::vector<Vec3> directionsToExtrinsicVectors(
-    GeometryCentralSurface& surface,
-    const FaceHeatDirectionField& normalizedFaceDirections) {
-  auto& mesh = *surface.mesh;
-  auto& geometry = *surface.geometry;
-  if (normalizedFaceDirections.size() != mesh.nFaces()) {
-    throw std::runtime_error("directionsToExtrinsicVectors requires one direction per face");
-  }
-
-  geometry.requireVertexPositions();
-  std::vector<Vec3> extrinsic(mesh.nFaces(), Vec3::Zero());
-  for (gcs::Face face : mesh.faces()) {
-    extrinsic[face.getIndex()] =
-        fromGcVector3(faceVectorToExtrinsic(face, normalizedFaceDirections[face.getIndex()], geometry));
-  }
-  geometry.unrequireVertexPositions();
-  return extrinsic;
-}
-
-std::vector<double> computeFaceShearAnglesDegrees(
-    GeometryCentralSurface& surface,
-    const FaceHeatDirectionField& normalizedFaceDirections0,
-    const FaceHeatDirectionField& normalizedFaceDirections1) {
-  auto& mesh = *surface.mesh;
-  auto& geometry = *surface.geometry;
-  return computeFaceShearAnglesDegrees(mesh, geometry, normalizedFaceDirections0, normalizedFaceDirections1);
 }
 
 std::vector<double> computeFaceShearAnglesDegrees(
