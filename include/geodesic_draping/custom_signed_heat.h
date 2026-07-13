@@ -10,7 +10,7 @@
 namespace geodesic_draping {
 
 using EdgeHeatField = std::vector<std::complex<double>>;
-using FaceHeatDirectionField = std::vector<Vec3>;
+using FaceHeatDirectionField = std::vector<geometrycentral::Vector3>;
 
 enum class VertexDirectionAveraging {
   FaceArea,
@@ -18,7 +18,7 @@ enum class VertexDirectionAveraging {
 };
 
 struct DiffusedHeatFieldResult {
-  std::vector<std::vector<SurfaceReference>> preprocessedSourceCurves;
+  std::vector<geometrycentral::surface::Curve> preprocessedSourceCurves;
   EdgeHeatField sourceEdgeHeatField;
   EdgeHeatField diffusedEdgeHeatField;
 };
@@ -54,19 +54,36 @@ public:
                          double diffusionTimeCoefficient = 1.0);
 
   DiffusedHeatFieldResult solveDiffusedEdgeHeatField(
+      const geometrycentral::surface::Curve& sourceCurve,
+      const SignedHeatSolveOptions& options = {});
+  DiffusedHeatFieldResult solveDiffusedEdgeHeatField(
       const std::vector<SurfaceReference>& sourceCurve,
       const SignedHeatSolveOptions& options = {});
 
+  CustomSignedHeatResult solve(const geometrycentral::surface::Curve& sourceCurve,
+                               const SignedHeatSolveOptions& options = {},
+                               bool computeDistance = false);
   CustomSignedHeatResult solve(const std::vector<SurfaceReference>& sourceCurve,
                                const SignedHeatSolveOptions& options = {},
                                bool computeDistance = false);
+  TimedCustomSignedHeatResult solveTimed(const geometrycentral::surface::Curve& sourceCurve,
+                                         const SignedHeatSolveOptions& options = {},
+                                         bool computeDistance = false);
   TimedCustomSignedHeatResult solveTimed(const std::vector<SurfaceReference>& sourceCurve,
                                          const SignedHeatSolveOptions& options = {},
                                          bool computeDistance = false);
 
+  std::array<CustomSignedHeatResult, 2> solve(
+      const std::array<geometrycentral::surface::Curve, 2>& sourceCurves,
+      const SignedHeatSolveOptions& options = {},
+      bool computeDistance = false);
   std::array<CustomSignedHeatResult, 2> solve(const SourceCurves& sourceCurves,
                                               const SignedHeatSolveOptions& options = {},
                                               bool computeDistance = false);
+  std::array<TimedCustomSignedHeatResult, 2> solveTimed(
+      const std::array<geometrycentral::surface::Curve, 2>& sourceCurves,
+      const SignedHeatSolveOptions& options = {},
+      bool computeDistance = false);
   std::array<TimedCustomSignedHeatResult, 2> solveTimed(const SourceCurves& sourceCurves,
                                                         const SignedHeatSolveOptions& options = {},
                                                         bool computeDistance = false);

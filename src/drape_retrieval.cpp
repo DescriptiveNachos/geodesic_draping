@@ -40,33 +40,41 @@ std::vector<Vec3> toVec3Vector(const gcs::VertexData<geometrycentral::Vector3>& 
   return out;
 }
 
-DrapeTrace makeTrace(const GeneratorTrace& generator, ResultDomain domain) {
+DrapeTrace makeTrace(gcs::VertexPositionGeometry& inputGeometry,
+                     gcs::IntrinsicTriangulation& triangulation,
+                     const IntrinsicGeneratorTrace& generator,
+                     ResultDomain domain) {
   DrapeTrace trace;
   trace.hitBoundary = generator.hitBoundary;
   trace.length = generator.length;
   if (domain == ResultDomain::Intrinsic) {
-    trace.intrinsicPoints = generator.surfaceReferences;
+    trace.intrinsicPoints.reserve(generator.points.size());
+    for (const gcs::SurfacePoint& point : generator.points) {
+      trace.intrinsicPoints.push_back(toSurfaceReference(point));
+    }
   } else {
-    trace.extrinsicPoints = generator.points;
+    trace.extrinsicPoints.reserve(generator.points.size());
+    for (const gcs::SurfacePoint& point : generator.points) {
+      trace.extrinsicPoints.push_back(
+          interpolateSurfacePoint(triangulation.equivalentPointOnInput(point), inputGeometry));
+    }
   }
   return trace;
 }
 
 } // namespace
 
-SeedProjection toExtrinsicSeed(ReferenceGeometry& reference,
-                               ActiveIntrinsicDomain& activeDomain,
-                               const SurfaceReference& intrinsicSeed) {
-  const gcs::SurfacePoint intrinsicPoint =
-      toGeometryCentralSurfacePoint(activeDomain.mesh(), intrinsicSeed);
+SeedProjection toExtrinsicSeed(gcs::VertexPositionGeometry& inputGeometry,
+                               gcs::IntrinsicTriangulation& triangulation,
+                               const gcs::SurfacePoint& intrinsicSeed) {
   const gcs::SurfacePoint inputPoint =
-      activeDomain.intrinsicToInput(intrinsicPoint).inSomeFace();
+      triangulation.equivalentPointOnInput(intrinsicSeed).inSomeFace();
 
   SeedProjection seed;
   seed.surfacePoint.faceIndex = inputPoint.face.getIndex();
   seed.surfacePoint.barycentric =
       Vec3(inputPoint.faceCoords.x, inputPoint.faceCoords.y, inputPoint.faceCoords.z);
-  seed.cartesian = interpolateSurfacePoint(inputPoint, *reference.surface().geometry);
+  seed.cartesian = interpolateSurfacePoint(inputPoint, inputGeometry);
   return seed;
 }
 
@@ -125,11 +133,18 @@ ResultMesh makeSubdivisionResultMesh(gcs::CommonSubdivision& subdivision,
   return out;
 }
 
-std::array<TraceFamily, 2> makeTraceFamilies(const std::array<GeneratorTrace, 4>& generators,
-                                             ResultDomain domain) {
+std::array<TraceFamily, 2> makeTraceFamilies(
+    gcs::VertexPositionGeometry& inputGeometry,
+    gcs::IntrinsicTriangulation& triangulation,
+    const std::array<IntrinsicGeneratorTrace, 4>& generators,
+    ResultDomain domain) {
   return {
-      TraceFamily{makeTrace(generators[0], domain), makeTrace(generators[1], domain)},
-      TraceFamily{makeTrace(generators[2], domain), makeTrace(generators[3], domain)},
+      TraceFamily{
+          makeTrace(inputGeometry, triangulation, generators[0], domain),
+          makeTrace(inputGeometry, triangulation, generators[1], domain)},
+      TraceFamily{
+          makeTrace(inputGeometry, triangulation, generators[2], domain),
+          makeTrace(inputGeometry, triangulation, generators[3], domain)},
   };
 }
 
@@ -143,49 +158,72 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
       retrieval == ResultDomain::Extrinsic || retrieval == ResultDomain::Subdivision;
   const std::optional<SeedProjection> extrinsicSeed =
       needsExtrinsicOrigin
-          ? std::optional<SeedProjection>{toExtrinsicSeed(reference_, activeDomain_, core.intrinsicSeed)}
+          ? std::optional<SeedProjection>{toExtrinsicSeed(
+                *inputSurface_.geometry,
+                *intrinsicTriangulation_,
+                core.intrinsicSeed)}
           : std::nullopt;
+  const SurfaceReference intrinsicSeed = toSurfaceReference(core.intrinsicSeed);
+  const std::array<TangentVectorRef, 4> intrinsicDirections = {
+      toTangentVectorRef(core.intrinsicDirections[0]),
+      toTangentVectorRef(core.intrinsicDirections[1]),
+      toTangentVectorRef(core.intrinsicDirections[2]),
+      toTangentVectorRef(core.intrinsicDirections[3]),
+  };
+  const std::array<Vec3, 4> extrinsicDirections = cartesianDirectionsFromIntrinsic(
+      *inputSurface_.geometry,
+      *intrinsicTriangulation_,
+      core.intrinsicSeed,
+      core.intrinsicDirections);
 
   if (retrieval == ResultDomain::Intrinsic) {
-    result.mesh = makeIntrinsicResultMesh(activeDomain_.mesh(), activeDomain_.geometry());
-    result.origin.intrinsicPoint = core.intrinsicSeed;
-    result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
-    result.traces = makeTraceFamilies(core.generators, ResultDomain::Intrinsic);
+    result.mesh = makeIntrinsicResultMesh(*intrinsicTriangulation_->intrinsicMesh, *intrinsicTriangulation_);
+    result.origin.intrinsicPoint = intrinsicSeed;
+    result.origin.intrinsicFamilyDirections = {intrinsicDirections[0], intrinsicDirections[2]};
+    result.traces = makeTraceFamilies(
+        *inputSurface_.geometry,
+        *intrinsicTriangulation_,
+        core.generators,
+        ResultDomain::Intrinsic);
     result.directions = core.directions;
     result.faceShear = core.faceShear;
     result.distances = core.distances;
     if (sampleVertexShear && core.faceShear) {
       result.vertexShear =
-          averageIntrinsicFaceScalarsToVertices(activeDomain_.mesh(), *core.faceShear);
+          averageIntrinsicFaceScalarsToVertices(*intrinsicTriangulation_->intrinsicMesh, *core.faceShear);
     }
   } else if (retrieval == ResultDomain::Subdivision) {
-    gcs::CommonSubdivision& subdivision = activeDomain_.triangulation().getCommonSubdivision();
+    gcs::CommonSubdivision& subdivision = intrinsicTriangulation_->getCommonSubdivision();
     subdivision.constructMesh();
-    result.mesh = makeSubdivisionResultMesh(subdivision, *reference_.surface().geometry);
+    result.mesh = makeSubdivisionResultMesh(subdivision, *inputSurface_.geometry);
     result.mesh.intrinsicSourceFaceColor =
-        faceDataToVector(subdivision.copyFromB(gcs::niceColors(activeDomain_.mesh())));
-    result.origin.intrinsicPoint = core.intrinsicSeed;
-    result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
+        faceDataToVector(subdivision.copyFromB(gcs::niceColors(*intrinsicTriangulation_->intrinsicMesh)));
+    result.origin.intrinsicPoint = intrinsicSeed;
+    result.origin.intrinsicFamilyDirections = {intrinsicDirections[0], intrinsicDirections[2]};
     result.origin.extrinsicPoint = extrinsicSeed->cartesian;
-    result.origin.extrinsicFamilyDirections = {core.cartesianDirections[0], core.cartesianDirections[2]};
-    result.traces = makeTraceFamilies(core.generators, ResultDomain::Subdivision);
+    result.origin.extrinsicFamilyDirections = {extrinsicDirections[0], extrinsicDirections[2]};
+    result.traces = makeTraceFamilies(
+        *inputSurface_.geometry,
+        *intrinsicTriangulation_,
+        core.generators,
+        ResultDomain::Subdivision);
 
     result.directions = {
         faceVectorDataToVector(subdivision.copyFromB(
-            activeFaceVectorData(activeDomain_.mesh(), core.directions[0]))),
+            activeFaceVectorData(*intrinsicTriangulation_->intrinsicMesh, core.directions[0]))),
         faceVectorDataToVector(subdivision.copyFromB(
-            activeFaceVectorData(activeDomain_.mesh(), core.directions[1]))),
+            activeFaceVectorData(*intrinsicTriangulation_->intrinsicMesh, core.directions[1]))),
     };
     if (core.faceShear) {
       result.faceShear = faceDataToVector(subdivision.copyFromB(
-          activeFaceData(activeDomain_.mesh(), *core.faceShear)));
+          activeFaceData(*intrinsicTriangulation_->intrinsicMesh, *core.faceShear)));
     }
     if (core.distances) {
       result.distances = std::array<std::vector<double>, 2>{
           vertexDataToVector(subdivision.interpolateAcrossB(
-              activeVertexData(activeDomain_.mesh(), (*core.distances)[0]))),
+              activeVertexData(*intrinsicTriangulation_->intrinsicMesh, (*core.distances)[0]))),
           vertexDataToVector(subdivision.interpolateAcrossB(
-              activeVertexData(activeDomain_.mesh(), (*core.distances)[1]))),
+              activeVertexData(*intrinsicTriangulation_->intrinsicMesh, (*core.distances)[1]))),
       };
     }
     if (sampleVertexShear && core.faceShear) {
@@ -196,31 +234,35 @@ DrapeResult GeoDrapeSolver::retrieveFromCore(const CoreIntrinsicResult& core,
               FaceScalarAveraging::FaceArea);
     }
   } else {
-    result.mesh = makeExtrinsicResultMesh(reference_.meshData());
-    result.origin.intrinsicPoint = core.intrinsicSeed;
-    result.origin.intrinsicFamilyDirections = {core.intrinsicDirections[0], core.intrinsicDirections[2]};
+    result.mesh = makeExtrinsicResultMesh(meshData_);
+    result.origin.intrinsicPoint = intrinsicSeed;
+    result.origin.intrinsicFamilyDirections = {intrinsicDirections[0], intrinsicDirections[2]};
     result.origin.extrinsicPoint = extrinsicSeed->cartesian;
-    result.origin.extrinsicFamilyDirections = {core.cartesianDirections[0], core.cartesianDirections[2]};
-    result.traces = makeTraceFamilies(core.generators, ResultDomain::Extrinsic);
+    result.origin.extrinsicFamilyDirections = {extrinsicDirections[0], extrinsicDirections[2]};
+    result.traces = makeTraceFamilies(
+        *inputSurface_.geometry,
+        *intrinsicTriangulation_,
+        core.generators,
+        ResultDomain::Extrinsic);
 
     if (core.distances) {
-      if ((*core.distances)[0].size() == reference_.meshData().vertices.size()) {
+      if ((*core.distances)[0].size() == meshData_.vertices.size()) {
         result.distances = core.distances;
       } else {
         result.distances = std::array<std::vector<double>, 2>{
-            restrictVertexScalarsToInput(activeDomain_.triangulation(), (*core.distances)[0]),
-            restrictVertexScalarsToInput(activeDomain_.triangulation(), (*core.distances)[1]),
+            restrictVertexScalarsToInput(*intrinsicTriangulation_, (*core.distances)[0]),
+            restrictVertexScalarsToInput(*intrinsicTriangulation_, (*core.distances)[1]),
         };
       }
     }
 
     if (sampleVertexShear && core.faceShear) {
       const std::vector<double> activeVertexShear =
-          averageIntrinsicFaceScalarsToVertices(activeDomain_.mesh(), *core.faceShear);
-      if (activeVertexShear.size() == reference_.meshData().vertices.size()) {
+          averageIntrinsicFaceScalarsToVertices(*intrinsicTriangulation_->intrinsicMesh, *core.faceShear);
+      if (activeVertexShear.size() == meshData_.vertices.size()) {
         result.vertexShear = activeVertexShear;
       } else {
-        result.vertexShear = restrictVertexScalarsToInput(activeDomain_.triangulation(), activeVertexShear);
+        result.vertexShear = restrictVertexScalarsToInput(*intrinsicTriangulation_, activeVertexShear);
       }
     }
   }

@@ -104,6 +104,12 @@ struct TraceFamily {
   DrapeTrace negative;
 };
 
+struct IntrinsicGeneratorTrace {
+  std::vector<geometrycentral::surface::SurfacePoint> points;
+  bool hitBoundary = false;
+  double length = 0.0;
+};
+
 struct DrapeResult {
   ResultDomain domain = ResultDomain::Extrinsic;
   DrapeSolveMode mode = DrapeSolveMode::Fast;
@@ -117,53 +123,18 @@ struct DrapeResult {
   std::optional<std::vector<double>> vertexShear;
 };
 
-class ReferenceGeometry {
-public:
-  explicit ReferenceGeometry(SurfaceMeshData meshData);
-
-  SurfaceMeshData& meshData();
-  const SurfaceMeshData& meshData() const;
-  GeometryCentralSurface& surface();
-  const GeometryCentralSurface& surface() const;
-
-private:
-  SurfaceMeshData meshData_;
-  GeometryCentralSurface surface_;
-};
-
-class ActiveIntrinsicDomain {
-public:
-  ActiveIntrinsicDomain(ReferenceGeometry& reference,
-                        const IntrinsicConstructionOptions& intrinsicOptions,
-                        const RefinementOptions& refinementOptions);
-
-  geometrycentral::surface::ManifoldSurfaceMesh& mesh();
-  geometrycentral::surface::IntrinsicGeometryInterface& geometry();
-  geometrycentral::surface::IntrinsicTriangulation& triangulation();
-  geometrycentral::surface::SurfacePoint inputToIntrinsic(
-      const geometrycentral::surface::SurfacePoint& pointOnInput);
-  geometrycentral::surface::SurfacePoint intrinsicToInput(
-      const geometrycentral::surface::SurfacePoint& pointOnIntrinsic);
-
-private:
-  std::unique_ptr<geometrycentral::surface::IntrinsicTriangulation> triangulation_;
-  bool useCommonSubdivisionInputAdapter_ = false;
-};
-
 struct IntrinsicSolveInput {
   geometrycentral::surface::SurfacePoint seed;
   std::array<geometrycentral::surface::BarycentricVector, 4> directions;
-  std::array<Vec3, 4> cartesianDirections;
   DrapeSolveMode mode = DrapeSolveMode::Complete;
   TraceSettings trace;
 };
 
 struct CoreIntrinsicResult {
   DrapeSolveMode mode = DrapeSolveMode::Complete;
-  SurfaceReference intrinsicSeed;
-  std::array<TangentVectorRef, 4> intrinsicDirections;
-  std::array<Vec3, 4> cartesianDirections;
-  std::array<GeneratorTrace, 4> generators;
+  geometrycentral::surface::SurfacePoint intrinsicSeed;
+  std::array<geometrycentral::surface::BarycentricVector, 4> intrinsicDirections;
+  std::array<IntrinsicGeneratorTrace, 4> generators;
   std::array<FaceHeatDirectionField, 2> directions;
   std::optional<std::array<std::vector<double>, 2>> distances;
   std::optional<std::vector<double>> faceShear;
@@ -205,6 +176,10 @@ public:
   DrapeResult solve(const Vec2& seedXY,
                     double fabricAngle,
                     const DrapeSolveOptions& solveOptions = {});
+  DrapeResult solveFromIntrinsic(const geometrycentral::surface::SurfacePoint& seed,
+                                 const geometrycentral::surface::BarycentricVector& fabricDirection,
+                                 double fiberAngle = 90.0,
+                                 const DrapeSolveOptions& solveOptions = {});
   DrapeResult solveFromIntrinsic(const SurfaceReference& seed,
                                  const TangentVectorRef& fabricDirection,
                                  double fiberAngle = 90.0,
@@ -224,8 +199,10 @@ private:
                                ResultDomain retrieval,
                                bool sampleVertexShear);
 
-  ReferenceGeometry reference_;
-  ActiveIntrinsicDomain activeDomain_;
+  SurfaceMeshData meshData_;
+  GeometryCentralSurface inputSurface_;
+  std::unique_ptr<geometrycentral::surface::IntrinsicTriangulation> intrinsicTriangulation_;
+  bool useCommonSubdivisionInputAdapter_ = false;
   TraceSettings traceDefaults_;
   SignedHeatSolveOptions heatOptions_;
   std::unique_ptr<CustomSignedHeatSolver> customHeatSolver_;

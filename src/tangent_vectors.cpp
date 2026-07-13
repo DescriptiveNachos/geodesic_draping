@@ -15,15 +15,15 @@ geometrycentral::Vector3 toGcVector3(const Vec3& value) {
   return geometrycentral::Vector3{value.x(), value.y(), value.z()};
 }
 
-gcs::BarycentricVector embeddedActiveFaceDirection(ReferenceGeometry& reference,
-                                                  ActiveIntrinsicDomain& activeDomain,
+gcs::BarycentricVector embeddedActiveFaceDirection(gcs::VertexPositionGeometry& inputGeometry,
+                                                  gcs::IntrinsicTriangulation& triangulation,
                                                   gcs::Face activeFace,
                                                   double angle) {
   std::array<Vec3, 3> positions;
   size_t i = 0;
   for (gcs::Vertex vertex : activeFace.adjacentVertices()) {
-    const gcs::SurfacePoint inputPoint = activeDomain.intrinsicToInput(gcs::SurfacePoint(vertex));
-    positions[i] = interpolateSurfacePoint(inputPoint, *reference.surface().geometry);
+    const gcs::SurfacePoint inputPoint = triangulation.equivalentPointOnInput(gcs::SurfacePoint(vertex));
+    positions[i] = interpolateSurfacePoint(inputPoint, inputGeometry);
     ++i;
   }
 
@@ -40,60 +40,10 @@ gcs::BarycentricVector embeddedActiveFaceDirection(ReferenceGeometry& reference,
   const Eigen::Vector2d uv = gram.ldlt().solve(rhs);
   return normalizeVector(
       gcs::BarycentricVector(activeFace, geometrycentral::Vector3{-uv.x() - uv.y(), uv.x(), uv.y()}),
-      activeDomain.geometry());
-}
-
-GeneratorTrace traceActiveGenerator(ReferenceGeometry& reference,
-                                    ActiveIntrinsicDomain& activeDomain,
-                                    const gcs::SurfacePoint& start,
-                                    const gcs::BarycentricVector& direction,
-                                    const TraceSettings& settings) {
-  gcs::SurfacePoint startFace = start.inSomeFace();
-  gcs::BarycentricVector directionInFace = direction.inFace(startFace.face);
-  directionInFace = normalizeVector(directionInFace, activeDomain.geometry()) * settings.traceLength;
-
-  gcs::TraceOptions options;
-  options.includePath = true;
-  options.errorOnProblem = false;
-  options.barrierEdges = nullptr;
-  options.maxIters = settings.maxIterations;
-
-  const gcs::TraceGeodesicResult traced = gcs::traceGeodesic(
-      activeDomain.geometry(),
-      startFace.face,
-      startFace.faceCoords,
-      directionInFace.faceCoords,
-      options);
-  if (!traced.hasPath) {
-    throw std::runtime_error("active traceGeodesic did not return a path");
-  }
-
-  GeneratorTrace trace;
-  trace.hitBoundary = traced.hitBoundary;
-  trace.length = traced.length;
-  trace.points.reserve(traced.pathPoints.size());
-  trace.surfaceReferences.reserve(traced.pathPoints.size());
-  for (const gcs::SurfacePoint& intrinsicPoint : traced.pathPoints) {
-    trace.surfaceReferences.push_back(toSurfaceReference(intrinsicPoint));
-    const gcs::SurfacePoint inputPoint = activeDomain.intrinsicToInput(intrinsicPoint);
-    trace.points.push_back(interpolateSurfacePoint(inputPoint, *reference.surface().geometry));
-  }
-  return trace;
+      triangulation);
 }
 
 } // namespace
-
-std::array<Vec3, 4> generateCartesianFamilyDirections(double fabricAngle,
-                                                       double fiberAngle) {
-  const double fabricAngleRadians = fabricAngle * kPi / 180.0;
-  const double fiberAngleRadians = fiberAngle * kPi / 180.0;
-
-  const Vec3 direction0(std::cos(fabricAngleRadians), std::sin(fabricAngleRadians), 0.0);
-  const Vec3 direction1(std::cos(fabricAngleRadians + fiberAngleRadians),
-                        std::sin(fabricAngleRadians + fiberAngleRadians),
-                        0.0);
-  return {direction0, -direction0, direction1, -direction1};
-}
 
 TraceSettings resolveTraceSettings(const TraceSettings& defaults,
                                    const AdvancedTraceOptions& overrides) {
@@ -149,61 +99,14 @@ gcs::BarycentricVector normalizeVector(gcs::BarycentricVector vector,
   return vector / magnitude;
 }
 
-gcs::BarycentricVector toBarycentricVector(gcs::SurfaceMesh& mesh,
-                                           const TangentVectorRef& ref) {
-  if (ref.type != SurfaceReferenceType::Face || ref.coords.size() != 3) {
-    throw std::runtime_error("solveFromIntrinsic currently requires a face tangent vector with three barycentric coordinates");
-  }
-  return gcs::BarycentricVector(
-      mesh.face(ref.elementIndex),
-      geometrycentral::Vector3{ref.coords[0], ref.coords[1], ref.coords[2]});
-}
-
-TangentVectorRef toTangentVectorRef(const gcs::BarycentricVector& vector) {
-  const gcs::BarycentricVector faceVector = vector.inSomeFace();
-  TangentVectorRef ref;
-  ref.type = SurfaceReferenceType::Face;
-  ref.elementIndex = faceVector.face.getIndex();
-  ref.coords = {faceVector.faceCoords.x, faceVector.faceCoords.y, faceVector.faceCoords.z};
-  return ref;
-}
-
-std::array<Vec3, 4> cartesianDirectionsFromIntrinsic(
-    ReferenceGeometry& reference,
-    ActiveIntrinsicDomain& activeDomain,
-    const gcs::SurfacePoint& seed,
-    const std::array<gcs::BarycentricVector, 4>& directions) {
-  std::array<Vec3, 4> out{};
-  const gcs::SurfacePoint seedFace = seed.inSomeFace();
-  std::array<Vec3, 3> positions;
-  size_t vertexIndex = 0;
-  for (gcs::Vertex vertex : seedFace.face.adjacentVertices()) {
-    const gcs::SurfacePoint inputPoint = activeDomain.intrinsicToInput(gcs::SurfacePoint(vertex));
-    positions[vertexIndex] = interpolateSurfacePoint(inputPoint, *reference.surface().geometry);
-    ++vertexIndex;
-  }
-
-  for (size_t i = 0; i < directions.size(); ++i) {
-    const gcs::BarycentricVector inFace = directions[i].inFace(seedFace.face);
-    Vec3 delta = inFace.faceCoords.x * positions[0] +
-                 inFace.faceCoords.y * positions[1] +
-                 inFace.faceCoords.z * positions[2];
-    const double norm = delta.norm();
-    out[i] = Vec3::Zero();
-    if (norm > 0.0) {
-      out[i] = delta / norm;
-    }
-  }
-  return out;
-}
-
-gcs::BarycentricVector intrinsicDirectionFromFabricAngle(ReferenceGeometry& reference,
-                                                        ActiveIntrinsicDomain& activeDomain,
+gcs::BarycentricVector intrinsicDirectionFromFabricAngle(const SurfaceMeshData& meshData,
+                                                        gcs::VertexPositionGeometry& inputGeometry,
+                                                        gcs::IntrinsicTriangulation& triangulation,
                                                         const gcs::SurfacePoint& inputSeed,
                                                         const gcs::SurfacePoint& intrinsicSeed,
                                                         double fabricAngle,
-                                                        bool inputConnectivityPreserved) {
-  auto& inputGeometry = *reference.surface().geometry;
+                                                        bool inputConnectivityPreserved,
+                                                        bool useCommonSubdivisionInputAdapter) {
   const gcs::SurfacePoint inputFaceSeed = inputSeed.inSomeFace();
   inputGeometry.requireFaceTangentBasis();
 
@@ -227,10 +130,10 @@ gcs::BarycentricVector intrinsicDirectionFromFabricAngle(ReferenceGeometry& refe
 
   const gcs::SurfacePoint intrinsicSeedFace = intrinsicSeed.inSomeFace();
   if (inputConnectivityPreserved) {
-    return embeddedActiveFaceDirection(reference, activeDomain, intrinsicSeedFace.face, fabricAngle);
+    return embeddedActiveFaceDirection(inputGeometry, triangulation, intrinsicSeedFace.face, fabricAngle);
   }
 
-  const double baseStep = std::max(1e-9, 1e-6 * boundingBoxDiagonal(reference.meshData()));
+  const double baseStep = std::max(1e-9, 1e-6 * boundingBoxDiagonal(meshData));
   gcs::TraceOptions options;
   options.includePath = false;
   options.errorOnProblem = false;
@@ -241,31 +144,17 @@ gcs::BarycentricVector intrinsicDirectionFromFabricAngle(ReferenceGeometry& refe
     const gcs::TraceGeodesicResult inputTrace =
         gcs::traceGeodesic(inputGeometry, inputSeed, step * tangentDirection, options);
     const gcs::SurfacePoint intrinsicEndpoint =
-        activeDomain.inputToIntrinsic(inputTrace.endPoint).inSomeFace();
+        inputToIntrinsic(triangulation, inputTrace.endPoint, useCommonSubdivisionInputAdapter).inSomeFace();
     try {
       const gcs::SurfacePoint endpointInSeedFace = intrinsicEndpoint.inFace(intrinsicSeedFace.face);
       return normalizeVector(gcs::BarycentricVector(intrinsicSeedFace, endpointInSeedFace),
-                             activeDomain.geometry());
+                             triangulation);
     } catch (const std::exception&) {
       // Retry with a shorter local displacement if the mapped endpoint crossed a face boundary.
     }
   }
 
-  return embeddedActiveFaceDirection(reference, activeDomain, intrinsicSeedFace.face, fabricAngle);
-}
-
-std::array<GeneratorTrace, 4> traceActiveGenerators(
-    ReferenceGeometry& reference,
-    ActiveIntrinsicDomain& activeDomain,
-    const gcs::SurfacePoint& start,
-    const std::array<gcs::BarycentricVector, 4>& directions,
-    const TraceSettings& settings) {
-  return {
-      traceActiveGenerator(reference, activeDomain, start, directions[0], settings),
-      traceActiveGenerator(reference, activeDomain, start, directions[1], settings),
-      traceActiveGenerator(reference, activeDomain, start, directions[2], settings),
-      traceActiveGenerator(reference, activeDomain, start, directions[3], settings),
-  };
+  return embeddedActiveFaceDirection(inputGeometry, triangulation, intrinsicSeedFace.face, fabricAngle);
 }
 
 } // namespace geodesic_draping

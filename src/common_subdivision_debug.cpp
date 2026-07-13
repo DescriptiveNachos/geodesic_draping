@@ -29,12 +29,12 @@ std::optional<double> parameterAlongEdge(const gcs::SurfacePoint& point, gcs::Ed
 } // namespace
 
 CommonSubdivisionDebugInfo GeoDrapeSolver::debugCommonSubdivision(bool attemptMeshConstruction) {
-  gcs::CommonSubdivision& subdivision = activeDomain_.triangulation().getCommonSubdivision();
+  gcs::CommonSubdivision& subdivision = intrinsicTriangulation_->getCommonSubdivision();
 
   CommonSubdivisionDebugInfo info;
   info.rawSubdivisionPointCount = subdivision.subdivisionPoints.size();
 
-  std::vector<bool> representedInputVertices(reference_.surface().mesh->nVertices(), false);
+  std::vector<bool> representedInputVertices(inputSurface_.mesh->nVertices(), false);
   for (const gcs::CommonSubdivisionPoint& point : subdivision.subdivisionPoints) {
     switch (point.intersectionType) {
     case gcs::CSIntersectionType::VERTEX_VERTEX:
@@ -98,7 +98,7 @@ CommonSubdivisionDebugInfo GeoDrapeSolver::debugCommonSubdivision(bool attemptMe
     }
   };
 
-  for (gcs::Edge edge : reference_.surface().mesh->edges()) {
+  for (gcs::Edge edge : inputSurface_.mesh->edges()) {
     inspectEdgeList(
         subdivision.pointsAlongA[edge],
         edge,
@@ -107,7 +107,7 @@ CommonSubdivisionDebugInfo GeoDrapeSolver::debugCommonSubdivision(bool attemptMe
         info.invalidPointsAlongAEndpointCount,
         info.nonMonotonePointsAlongACount);
   }
-  for (gcs::Edge edge : activeDomain_.mesh().edges()) {
+  for (gcs::Edge edge : intrinsicTriangulation_->intrinsicMesh->edges()) {
     inspectEdgeList(
         subdivision.pointsAlongB[edge],
         edge,

@@ -10,16 +10,6 @@
 namespace geodesic_draping {
 namespace {
 
-std::unique_ptr<gcs::IntrinsicTriangulation> makeIntrinsicTriangulation(
-    IntrinsicTriangulationBackend backend,
-    gcs::ManifoldSurfaceMesh& mesh,
-    gcs::IntrinsicGeometryInterface& geometry) {
-  if (backend == IntrinsicTriangulationBackend::Signpost) {
-    return std::make_unique<gcs::SignpostIntrinsicTriangulation>(mesh, geometry);
-  }
-  return std::make_unique<gcs::IntegerCoordinatesIntrinsicTriangulation>(mesh, geometry);
-}
-
 Vec3 toEigenVector(const geometrycentral::Vector3& value) {
   return Vec3(value.x, value.y, value.z);
 }
@@ -93,68 +83,40 @@ gcs::SurfacePoint inputToIntrinsicViaCommonSubdivision(gcs::IntrinsicTriangulati
 
 } // namespace
 
-ReferenceGeometry::ReferenceGeometry(SurfaceMeshData meshData)
-    : meshData_(std::move(meshData)), surface_(makeGeometryCentralSurface(meshData_)) {}
-
-SurfaceMeshData& ReferenceGeometry::meshData() {
-  return meshData_;
+std::unique_ptr<gcs::IntrinsicTriangulation> makeIntrinsicTriangulation(
+    IntrinsicTriangulationBackend backend,
+    gcs::ManifoldSurfaceMesh& mesh,
+    gcs::IntrinsicGeometryInterface& geometry) {
+  if (backend == IntrinsicTriangulationBackend::Signpost) {
+    return std::make_unique<gcs::SignpostIntrinsicTriangulation>(mesh, geometry);
+  }
+  return std::make_unique<gcs::IntegerCoordinatesIntrinsicTriangulation>(mesh, geometry);
 }
 
-const SurfaceMeshData& ReferenceGeometry::meshData() const {
-  return meshData_;
-}
-
-GeometryCentralSurface& ReferenceGeometry::surface() {
-  return surface_;
-}
-
-const GeometryCentralSurface& ReferenceGeometry::surface() const {
-  return surface_;
-}
-
-ActiveIntrinsicDomain::ActiveIntrinsicDomain(ReferenceGeometry& reference,
-                                             const IntrinsicConstructionOptions& intrinsicOptions,
-                                             const RefinementOptions& refinementOptions) {
-  useCommonSubdivisionInputAdapter_ =
-      intrinsicOptions.backend == IntrinsicTriangulationBackend::IntegerCoordinates;
-  triangulation_ = makeIntrinsicTriangulation(
-      intrinsicOptions.backend,
-      *reference.surface().mesh,
-      *reference.surface().geometry);
-
+void applyRefinement(gcs::IntrinsicTriangulation& triangulation,
+                     const RefinementOptions& refinementOptions) {
   if (refinementOptions.mode == RefinementMode::DelaunayFlip) {
-    triangulation_->flipToDelaunay();
+    triangulation.flipToDelaunay();
   } else if (refinementOptions.mode == RefinementMode::DelaunayRefine) {
     const double angleThreshold = refinementOptions.angleThreshold.value_or(25.0);
     const double circumradiusThreshold =
         refinementOptions.circumradiusThreshold.value_or(std::numeric_limits<double>::infinity());
     const size_t maxInsertions =
         refinementOptions.maxInsertions.value_or(geometrycentral::INVALID_IND);
-    triangulation_->delaunayRefine(angleThreshold, circumradiusThreshold, maxInsertions);
+    triangulation.delaunayRefine(angleThreshold, circumradiusThreshold, maxInsertions);
   }
 }
 
-gcs::ManifoldSurfaceMesh& ActiveIntrinsicDomain::mesh() {
-  return *triangulation_->intrinsicMesh;
-}
-
-gcs::IntrinsicGeometryInterface& ActiveIntrinsicDomain::geometry() {
-  return *triangulation_;
-}
-
-gcs::IntrinsicTriangulation& ActiveIntrinsicDomain::triangulation() {
-  return *triangulation_;
-}
-
-gcs::SurfacePoint ActiveIntrinsicDomain::inputToIntrinsic(const gcs::SurfacePoint& pointOnInput) {
-  if (useCommonSubdivisionInputAdapter_) {
-    return inputToIntrinsicViaCommonSubdivision(*triangulation_, pointOnInput);
+gcs::SurfacePoint inputToIntrinsic(gcs::IntrinsicTriangulation& triangulation,
+                                   const gcs::SurfacePoint& pointOnInput,
+                                   bool useCommonSubdivisionInputAdapter) {
+  if (useCommonSubdivisionInputAdapter) {
+    // geometry-central's IntegerCoordinatesIntrinsicTriangulation currently does not
+    // support equivalentPointOnIntrinsic(), so input points are mapped through the
+    // common subdivision instead.
+    return inputToIntrinsicViaCommonSubdivision(triangulation, pointOnInput);
   }
-  return triangulation_->equivalentPointOnIntrinsic(pointOnInput);
-}
-
-gcs::SurfacePoint ActiveIntrinsicDomain::intrinsicToInput(const gcs::SurfacePoint& pointOnIntrinsic) {
-  return triangulation_->equivalentPointOnInput(pointOnIntrinsic);
+  return triangulation.equivalentPointOnIntrinsic(pointOnInput);
 }
 
 } // namespace geodesic_draping
