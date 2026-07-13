@@ -72,6 +72,18 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
   add_test(NAME smoke_geometrycentral COMMAND smoke_geometrycentral)
 endif()
 
+add_executable(benchmark_drape
+  tools/benchmark_drape.cpp)
+target_link_libraries(benchmark_drape
+  PRIVATE
+    geodesic_draping)
+target_include_directories(benchmark_drape
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+target_compile_definitions(benchmark_drape
+  PRIVATE
+    GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+
 if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
   add_executable(debug_drape_result
     tools/debug_drape_result.cpp)
