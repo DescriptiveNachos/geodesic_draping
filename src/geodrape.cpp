@@ -32,32 +32,17 @@ GeoDrapeSolver::GeoDrapeSolver(SurfaceMeshData meshData,
       heatOptions_.diffusionTimeCoefficient);
 }
 
-const CoreIntrinsicResult& GeoDrapeSolver::solve(const Vec2& seedXY,
-                                                 double fabricAngle,
-                                                 const DrapeSolveOptions& solveOptions) {
-  const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
-  const IntrinsicSolveInput input = adaptExtrinsicInput(
-      seedXY,
-      fabricAngle,
-      solveOptions.fiberAngle,
-      solveOptions.mode,
-      trace);
-  lastIntrinsicResult_ = solveCore(input);
-  return *lastIntrinsicResult_;
-}
-
-const CoreIntrinsicResult& GeoDrapeSolver::solveFromIntrinsic(
+IntrinsicSolveInput GeoDrapeSolver::adaptIntrinsicInput(
     const gcs::SurfacePoint& seed,
     const gcs::BarycentricVector& fabricDirection,
-    double fiberAngle,
-    const DrapeSolveOptions& solveOptions) {
-  const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
+    const DrapeSolveOptions& solveOptions,
+    const TraceSettings& trace) {
   const gcs::SurfacePoint intrinsicSeed = seed.inSomeFace();
   const gcs::BarycentricVector direction0 = normalizeVector(
       fabricDirection.inFace(intrinsicSeed.face),
       *intrinsicTriangulation_);
   gcs::BarycentricVector direction1 =
-      normalizeVector(direction0.rotate(*intrinsicTriangulation_, fiberAngle * kPi / 180.0),
+      normalizeVector(direction0.rotate(*intrinsicTriangulation_, solveOptions.fiberAngle * kPi / 180.0),
                       *intrinsicTriangulation_);
 
   IntrinsicSolveInput input;
@@ -65,16 +50,7 @@ const CoreIntrinsicResult& GeoDrapeSolver::solveFromIntrinsic(
   input.directions = {direction0, -direction0, direction1, -direction1};
   input.mode = solveOptions.mode;
   input.trace = trace;
-
-  lastIntrinsicResult_ = solveCore(input);
-  return *lastIntrinsicResult_;
-}
-
-const CoreIntrinsicResult& GeoDrapeSolver::lastResult() const {
-  if (!lastIntrinsicResult_) {
-    throw std::runtime_error("GeoDrapeSolver::lastResult() requires a previous solve");
-  }
-  return *lastIntrinsicResult_;
+  return input;
 }
 
 IntrinsicSolveInput GeoDrapeSolver::adaptExtrinsicInput(const Vec2& seedXY,

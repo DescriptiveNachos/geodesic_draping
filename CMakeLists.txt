@@ -25,6 +25,7 @@ add_library(geodesic_draping
   src/surface_construction.cpp
   src/generator_tracing.cpp
   src/intrinsic_domain.cpp
+  src/geodrape_public.cpp
   src/seed_projection.cpp
   src/custom_signed_heat.cpp
   src/drape_retrieval.cpp

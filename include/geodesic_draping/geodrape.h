@@ -23,6 +23,12 @@ enum class DrapeSolveMode {
   Complete,
 };
 
+enum class RetrievalDomain {
+  Intrinsic,
+  Extrinsic,
+  Subdivision,
+};
+
 enum class RefinementMode {
   None,
   DelaunayFlip,
@@ -65,6 +71,11 @@ struct DrapeSolveOptions {
   AdvancedSolveOptions advanced;
 };
 
+struct RetrievalOptions {
+  RetrievalDomain domain = RetrievalDomain::Extrinsic;
+  bool sampleVertexShear = false;
+};
+
 struct IntrinsicGeneratorTrace {
   std::vector<geometrycentral::surface::SurfacePoint> points;
   bool hitBoundary = false;
@@ -94,38 +105,28 @@ struct ExtrinsicGeneratorTrace {
   double length = 0.0;
 };
 
-struct IntrinsicDrapeResult {
-  const geometrycentral::surface::SurfaceMesh* mesh = nullptr;
-  const geometrycentral::surface::IntrinsicGeometryInterface* geometry = nullptr;
+struct DrapeResult {
+  RetrievalDomain domain = RetrievalDomain::Extrinsic;
   DrapeSolveMode mode = DrapeSolveMode::Complete;
-  geometrycentral::surface::SurfacePoint seed;
-  std::array<geometrycentral::surface::BarycentricVector, 4> directions;
-  std::array<IntrinsicGeneratorTrace, 4> generators;
-  std::array<geometrycentral::surface::FaceData<geometrycentral::Vector3>, 2> directionFields;
-  std::optional<std::array<geometrycentral::surface::VertexData<double>, 2>> distances;
-  std::optional<geometrycentral::surface::FaceData<double>> faceShear;
-  std::optional<geometrycentral::surface::VertexData<double>> vertexShear;
-};
 
-struct ExtrinsicDrapeResult {
-  const geometrycentral::surface::SurfaceMesh* mesh = nullptr;
-  const geometrycentral::surface::VertexPositionGeometry* geometry = nullptr;
-  DrapeSolveMode mode = DrapeSolveMode::Complete;
-  geometrycentral::Vector3 seed = geometrycentral::Vector3::zero();
-  std::array<geometrycentral::Vector3, 4> directions;
-  std::array<ExtrinsicGeneratorTrace, 4> generators;
-  std::optional<std::array<geometrycentral::surface::VertexData<double>, 2>> distances;
-  std::optional<geometrycentral::surface::VertexData<double>> vertexShear;
-};
+  // Keeps solver-owned geometry alive for one-shot solveDrape() results.
+  std::shared_ptr<const void> storageOwner;
 
-struct SubdivisionDrapeResult {
   const geometrycentral::surface::SurfaceMesh* mesh = nullptr;
-  DrapeSolveMode mode = DrapeSolveMode::Complete;
-  geometrycentral::surface::VertexData<geometrycentral::Vector3> vertexPositions;
-  geometrycentral::Vector3 seed = geometrycentral::Vector3::zero();
-  std::array<geometrycentral::Vector3, 4> directions;
-  std::array<ExtrinsicGeneratorTrace, 4> generators;
-  std::array<geometrycentral::surface::FaceData<geometrycentral::Vector3>, 2> directionFields;
+  const geometrycentral::surface::IntrinsicGeometryInterface* intrinsicGeometry = nullptr;
+  const geometrycentral::surface::VertexPositionGeometry* extrinsicGeometry = nullptr;
+
+  std::optional<geometrycentral::surface::VertexData<geometrycentral::Vector3>> vertexPositions;
+
+  std::optional<geometrycentral::surface::SurfacePoint> intrinsicSeed;
+  std::optional<std::array<geometrycentral::surface::BarycentricVector, 4>> intrinsicDirections;
+  std::optional<std::array<IntrinsicGeneratorTrace, 4>> intrinsicGenerators;
+
+  std::optional<geometrycentral::Vector3> extrinsicSeed;
+  std::optional<std::array<geometrycentral::Vector3, 4>> extrinsicDirections;
+  std::optional<std::array<ExtrinsicGeneratorTrace, 4>> extrinsicGenerators;
+
+  std::optional<std::array<geometrycentral::surface::FaceData<geometrycentral::Vector3>, 2>> directionFields;
   std::optional<std::array<geometrycentral::surface::VertexData<double>, 2>> distances;
   std::optional<geometrycentral::surface::FaceData<double>> faceShear;
   std::optional<geometrycentral::surface::VertexData<double>> vertexShear;
@@ -140,18 +141,17 @@ public:
                  const IntrinsicConstructionOptions& intrinsicOptions,
                  const RefinementOptions& refinementOptions = {});
 
-  const CoreIntrinsicResult& solve(const Vec2& seedXY,
-                                   double fabricAngle,
-                                   const DrapeSolveOptions& solveOptions = {});
-  const CoreIntrinsicResult& solveFromIntrinsic(
+  DrapeResult solve(const Vec2& seedXY,
+                    double fabricAngle,
+                    const DrapeSolveOptions& solveOptions = {},
+                    const RetrievalOptions& retrievalOptions = {});
+  DrapeResult solveFromIntrinsic(
       const geometrycentral::surface::SurfacePoint& seed,
       const geometrycentral::surface::BarycentricVector& fabricDirection,
-      double fiberAngle = 90.0,
-      const DrapeSolveOptions& solveOptions = {});
-  const CoreIntrinsicResult& lastResult() const;
-  IntrinsicDrapeResult retrieveIntrinsic(bool sampleVertexShear = false) const;
-  ExtrinsicDrapeResult retrieveExtrinsic(bool sampleVertexShear = false) const;
-  SubdivisionDrapeResult retrieveSubdivision(bool sampleVertexShear = false) const;
+      const DrapeSolveOptions& solveOptions = {},
+      const RetrievalOptions& retrievalOptions = {});
+  DrapeResult retrieve(const RetrievalOptions& retrievalOptions = {}) const;
+  const CoreIntrinsicResult& lastCoreResult() const;
 
 private:
   IntrinsicSolveInput adaptExtrinsicInput(const Vec2& seedXY,
@@ -159,7 +159,15 @@ private:
                                           double fiberAngle,
                                           DrapeSolveMode mode,
                                           const TraceSettings& trace);
+  IntrinsicSolveInput adaptIntrinsicInput(
+      const geometrycentral::surface::SurfacePoint& seed,
+      const geometrycentral::surface::BarycentricVector& fabricDirection,
+      const DrapeSolveOptions& solveOptions,
+      const TraceSettings& trace);
   CoreIntrinsicResult solveCore(const IntrinsicSolveInput& input);
+  DrapeResult retrieveIntrinsic(bool sampleVertexShear = false) const;
+  DrapeResult retrieveExtrinsic(bool sampleVertexShear = false) const;
+  DrapeResult retrieveSubdivision(bool sampleVertexShear = false) const;
 
   SurfaceMeshData meshData_;
   GeometryCentralSurface inputSurface_;
@@ -171,5 +179,14 @@ private:
   std::optional<CoreIntrinsicResult> lastIntrinsicResult_;
   bool inputConnectivityPreserved_ = true;
 };
+
+DrapeResult solveDrape(SurfaceMeshData meshData,
+                       const Vec2& seedXY,
+                       double fabricAngle,
+                       const SignedHeatSolveOptions& heatOptions = {},
+                       const DrapeSolveOptions& solveOptions = {},
+                       const RetrievalOptions& retrievalOptions = {},
+                       const IntrinsicConstructionOptions& intrinsicOptions = {},
+                       const RefinementOptions& refinementOptions = {});
 
 } // namespace geodesic_draping

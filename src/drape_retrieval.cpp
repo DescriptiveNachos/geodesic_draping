@@ -146,17 +146,18 @@ gcs::VertexData<geometrycentral::Vector3> subdivisionVertexPositions(
 
 } // namespace
 
-IntrinsicDrapeResult GeoDrapeSolver::retrieveIntrinsic(bool sampleVertexShear) const {
-  const CoreIntrinsicResult& core = lastResult();
+DrapeResult GeoDrapeSolver::retrieveIntrinsic(bool sampleVertexShear) const {
+  const CoreIntrinsicResult& core = lastCoreResult();
   gcs::SurfaceMesh& mesh = *intrinsicTriangulation_->intrinsicMesh;
 
-  IntrinsicDrapeResult result;
+  DrapeResult result;
+  result.domain = RetrievalDomain::Intrinsic;
   result.mesh = &mesh;
-  result.geometry = intrinsicTriangulation_.get();
+  result.intrinsicGeometry = intrinsicTriangulation_.get();
   result.mode = core.mode;
-  result.seed = core.intrinsicSeed;
-  result.directions = core.intrinsicDirections;
-  result.generators = core.generators;
+  result.intrinsicSeed = core.intrinsicSeed;
+  result.intrinsicDirections = core.intrinsicDirections;
+  result.intrinsicGenerators = core.generators;
   result.directionFields = {
       toFaceData(mesh, core.directions[0]),
       toFaceData(mesh, core.directions[1]),
@@ -176,23 +177,24 @@ IntrinsicDrapeResult GeoDrapeSolver::retrieveIntrinsic(bool sampleVertexShear) c
   return result;
 }
 
-ExtrinsicDrapeResult GeoDrapeSolver::retrieveExtrinsic(bool sampleVertexShear) const {
-  const CoreIntrinsicResult& core = lastResult();
+DrapeResult GeoDrapeSolver::retrieveExtrinsic(bool sampleVertexShear) const {
+  const CoreIntrinsicResult& core = lastCoreResult();
   gcs::SurfaceMesh& intrinsicMesh = *intrinsicTriangulation_->intrinsicMesh;
 
-  ExtrinsicDrapeResult result;
+  DrapeResult result;
+  result.domain = RetrievalDomain::Extrinsic;
   result.mesh = inputSurface_.mesh.get();
-  result.geometry = inputSurface_.geometry.get();
+  result.extrinsicGeometry = inputSurface_.geometry.get();
   result.mode = core.mode;
-  result.seed = intrinsicPointToInputPosition(
+  result.extrinsicSeed = intrinsicPointToInputPosition(
       *intrinsicTriangulation_,
       *inputSurface_.geometry,
       core.intrinsicSeed);
-  result.generators = toExtrinsicTraces(
+  result.extrinsicGenerators = toExtrinsicTraces(
       *intrinsicTriangulation_,
       *inputSurface_.geometry,
       core.generators);
-  result.directions = directionsFromExtrinsicTraces(result.seed, result.generators);
+  result.extrinsicDirections = directionsFromExtrinsicTraces(*result.extrinsicSeed, *result.extrinsicGenerators);
 
   if (core.distances) {
     const std::array<gcs::VertexData<double>, 2> intrinsicDistances{
@@ -211,25 +213,26 @@ ExtrinsicDrapeResult GeoDrapeSolver::retrieveExtrinsic(bool sampleVertexShear) c
   return result;
 }
 
-SubdivisionDrapeResult GeoDrapeSolver::retrieveSubdivision(bool sampleVertexShear) const {
-  const CoreIntrinsicResult& core = lastResult();
+DrapeResult GeoDrapeSolver::retrieveSubdivision(bool sampleVertexShear) const {
+  const CoreIntrinsicResult& core = lastCoreResult();
   gcs::SurfaceMesh& intrinsicMesh = *intrinsicTriangulation_->intrinsicMesh;
   gcs::CommonSubdivision& subdivision = intrinsicTriangulation_->getCommonSubdivision();
   subdivision.constructMesh();
 
-  SubdivisionDrapeResult result;
+  DrapeResult result;
+  result.domain = RetrievalDomain::Subdivision;
   result.mesh = subdivision.mesh.get();
   result.mode = core.mode;
   result.vertexPositions = subdivisionVertexPositions(subdivision, *inputSurface_.geometry);
-  result.seed = intrinsicPointToInputPosition(
+  result.extrinsicSeed = intrinsicPointToInputPosition(
       *intrinsicTriangulation_,
       *inputSurface_.geometry,
       core.intrinsicSeed);
-  result.generators = toExtrinsicTraces(
+  result.extrinsicGenerators = toExtrinsicTraces(
       *intrinsicTriangulation_,
       *inputSurface_.geometry,
       core.generators);
-  result.directions = directionsFromExtrinsicTraces(result.seed, result.generators);
+  result.extrinsicDirections = directionsFromExtrinsicTraces(*result.extrinsicSeed, *result.extrinsicGenerators);
 
   const gcs::FaceData<geometrycentral::Vector3> intrinsicDirections0 =
       toFaceData(intrinsicMesh, core.directions[0]);
