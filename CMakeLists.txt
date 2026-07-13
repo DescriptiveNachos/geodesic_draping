@@ -70,6 +70,13 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
     PRIVATE
       geodesic_draping)
   add_test(NAME smoke_geometrycentral COMMAND smoke_geometrycentral)
+
+  add_executable(smoke_seed_projection
+    tests/smoke_seed_projection.cpp)
+  target_link_libraries(smoke_seed_projection
+    PRIVATE
+      geodesic_draping)
+  add_test(NAME smoke_seed_projection COMMAND smoke_seed_projection)
 endif()
 
 add_executable(benchmark_drape

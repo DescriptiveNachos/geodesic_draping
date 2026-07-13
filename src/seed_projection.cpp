@@ -7,12 +7,37 @@
 namespace geodesic_draping {
 namespace {
 
+constexpr double kBarycentricBoundaryTolerance = 1e-12;
+
 std::array<Vec3, 3> triangleForFace(const SurfaceMeshData& mesh, const Face& face) {
   return {mesh.vertices[face[0]], mesh.vertices[face[1]], mesh.vertices[face[2]]};
 }
 
 Vec2 centroidXY(const std::array<Vec3, 3>& triangle) {
   return (triangle[0].head<2>() + triangle[1].head<2>() + triangle[2].head<2>()) / 3.0;
+}
+
+std::optional<Vec3> cleanBoundaryBarycentric(const Vec3& barycentric) {
+  if (barycentric.minCoeff() < -kBarycentricBoundaryTolerance ||
+      barycentric.maxCoeff() > 1.0 + kBarycentricBoundaryTolerance) {
+    return std::nullopt;
+  }
+
+  Vec3 cleaned = barycentric;
+  for (int i = 0; i < cleaned.size(); ++i) {
+    if (std::abs(cleaned[i]) <= kBarycentricBoundaryTolerance) {
+      cleaned[i] = 0.0;
+    } else if (std::abs(cleaned[i] - 1.0) <= kBarycentricBoundaryTolerance) {
+      cleaned[i] = 1.0;
+    }
+  }
+
+  cleaned = cleaned.cwiseMax(0.0);
+  const double sum = cleaned.sum();
+  if (sum <= 0.0) {
+    return std::nullopt;
+  }
+  return cleaned / sum;
 }
 
 } // namespace
@@ -36,10 +61,7 @@ std::optional<Vec3> pointInTriangleXY(const Vec2& point, const std::array<Vec3, 
   const double v = ((y2 - y0) * (x - x2) + (x0 - x2) * (y - y2)) / denom;
   const double w = 1.0 - u - v;
 
-  if (u >= 0.0 && v >= 0.0 && w >= 0.0) {
-    return Vec3(u, v, w);
-  }
-  return std::nullopt;
+  return cleanBoundaryBarycentric(Vec3(u, v, w));
 }
 
 std::optional<SeedProjection> projectPointXYToMesh(const SurfaceMeshData& mesh,
