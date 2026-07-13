@@ -27,6 +27,7 @@ add_library(geodesic_draping
   src/intrinsic_domain.cpp
   src/seed_projection.cpp
   src/custom_signed_heat.cpp
+  src/drape_retrieval.cpp
   src/tangent_vectors.cpp
   src/version.cpp)
 

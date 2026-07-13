@@ -5,6 +5,7 @@
 
 #include "geometrycentral/surface/intrinsic_triangulation.h"
 #include "geometrycentral/surface/barycentric_vector.h"
+#include "geometrycentral/surface/vertex_position_geometry.h"
 #include "geometrycentral/surface/surface_point.h"
 
 #include <array>
@@ -86,6 +87,49 @@ struct CoreIntrinsicResult {
   std::optional<std::vector<double>> faceShear;
 };
 
+struct ExtrinsicGeneratorTrace {
+  std::vector<geometrycentral::Vector3> points;
+  bool hitBoundary = false;
+  double length = 0.0;
+};
+
+struct IntrinsicDrapeResult {
+  const geometrycentral::surface::SurfaceMesh* mesh = nullptr;
+  const geometrycentral::surface::IntrinsicGeometryInterface* geometry = nullptr;
+  DrapeSolveMode mode = DrapeSolveMode::Complete;
+  geometrycentral::surface::SurfacePoint seed;
+  std::array<geometrycentral::surface::BarycentricVector, 4> directions;
+  std::array<IntrinsicGeneratorTrace, 4> generators;
+  std::array<geometrycentral::surface::FaceData<geometrycentral::Vector3>, 2> directionFields;
+  std::optional<std::array<geometrycentral::surface::VertexData<double>, 2>> distances;
+  std::optional<geometrycentral::surface::FaceData<double>> faceShear;
+  std::optional<geometrycentral::surface::VertexData<double>> vertexShear;
+};
+
+struct ExtrinsicDrapeResult {
+  const geometrycentral::surface::SurfaceMesh* mesh = nullptr;
+  const geometrycentral::surface::VertexPositionGeometry* geometry = nullptr;
+  DrapeSolveMode mode = DrapeSolveMode::Complete;
+  geometrycentral::Vector3 seed = geometrycentral::Vector3::zero();
+  std::array<geometrycentral::Vector3, 4> directions;
+  std::array<ExtrinsicGeneratorTrace, 4> generators;
+  std::optional<std::array<geometrycentral::surface::VertexData<double>, 2>> distances;
+  std::optional<geometrycentral::surface::VertexData<double>> vertexShear;
+};
+
+struct SubdivisionDrapeResult {
+  const geometrycentral::surface::SurfaceMesh* mesh = nullptr;
+  DrapeSolveMode mode = DrapeSolveMode::Complete;
+  geometrycentral::surface::VertexData<geometrycentral::Vector3> vertexPositions;
+  geometrycentral::Vector3 seed = geometrycentral::Vector3::zero();
+  std::array<geometrycentral::Vector3, 4> directions;
+  std::array<ExtrinsicGeneratorTrace, 4> generators;
+  std::array<geometrycentral::surface::FaceData<geometrycentral::Vector3>, 2> directionFields;
+  std::optional<std::array<geometrycentral::surface::VertexData<double>, 2>> distances;
+  std::optional<geometrycentral::surface::FaceData<double>> faceShear;
+  std::optional<geometrycentral::surface::VertexData<double>> vertexShear;
+};
+
 class GeoDrapeSolver {
 public:
   explicit GeoDrapeSolver(SurfaceMeshData meshData,
@@ -104,6 +148,9 @@ public:
       double fiberAngle = 90.0,
       const DrapeSolveOptions& solveOptions = {});
   const CoreIntrinsicResult& lastResult() const;
+  IntrinsicDrapeResult retrieveIntrinsic(bool sampleVertexShear = false) const;
+  ExtrinsicDrapeResult retrieveExtrinsic(bool sampleVertexShear = false) const;
+  SubdivisionDrapeResult retrieveSubdivision(bool sampleVertexShear = false) const;
 
 private:
   IntrinsicSolveInput adaptExtrinsicInput(const Vec2& seedXY,
