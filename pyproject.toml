@@ -1,0 +1,49 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12", "numpy"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "geodesic-draping"
+version = "0.1.0"
+description = "Geodesic draping on triangle meshes"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+authors = [
+  { name = "Doran Nettig", email = "doran.nettig@tuhh.de" },
+]
+maintainers = [
+  { name = "Doran Nettig", email = "doran.nettig@tuhh.de" },
+]
+dependencies = ["numpy"]
+classifiers = [
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Repository = "https://github.com/DescriptiveNachos/geodesic_draping"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.scikit-build]
+cmake.args = [
+  "-DGEODESIC_DRAPING_BUILD_PYTHON=ON",
+  "-DGEODESIC_DRAPING_BUILD_TOOLS=OFF",
+  "-DGEODESIC_DRAPING_ENABLE_POLYSCOPE=OFF",
+]
+wheel.packages = ["python/geodesic_draping"]
+
+[tool.scikit-build.sdist]
+exclude = [
+  "extern/polyscope/**",
+  "extern/geometry-central/.github/**",
+  "extern/geometry-central/docs/**",
+  "extern/geometry-central/test/**",
+  "extern/geometry-central/deps/happly/test/**",
+]

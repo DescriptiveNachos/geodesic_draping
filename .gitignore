@@ -1,6 +1,9 @@
 build/
-.venv/
+dist/
+.venv*/
+*.egg-info/
 __pycache__/
 *.py[cod]
+*.pyd
 .polyscope.ini
 imgui.ini

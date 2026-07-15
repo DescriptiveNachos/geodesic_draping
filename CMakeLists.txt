@@ -5,17 +5,19 @@ project(geodesic_draping
   LANGUAGES CXX)
 
 option(GEODESIC_DRAPING_BUILD_TESTS "Build geodesic draping tests" OFF)
+option(GEODESIC_DRAPING_BUILD_TOOLS "Build geodesic draping command-line tools" ON)
 option(GEODESIC_DRAPING_ENABLE_POLYSCOPE "Enable optional Polyscope plotting helpers" OFF)
+option(GEODESIC_DRAPING_BUILD_PYTHON "Build Python bindings" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_subdirectory(extern/geometry-central)
+add_subdirectory(extern/geometry-central EXCLUDE_FROM_ALL)
 
 if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
   set(POLYSCOPE_BACKEND_OPENGL3_EGL OFF CACHE STRING "Disable EGL backend on Windows" FORCE)
-  add_subdirectory(extern/polyscope)
+  add_subdirectory(extern/polyscope EXCLUDE_FROM_ALL)
 endif()
 
 add_library(geodesic_draping
@@ -79,28 +81,45 @@ if(GEODESIC_DRAPING_BUILD_TESTS)
   add_test(NAME smoke_seed_projection COMMAND smoke_seed_projection)
 endif()
 
-add_executable(benchmark_drape
-  tools/benchmark_drape.cpp)
-target_link_libraries(benchmark_drape
-  PRIVATE
-    geodesic_draping)
-target_include_directories(benchmark_drape
-  PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools)
-target_compile_definitions(benchmark_drape
-  PRIVATE
-    GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+if(GEODESIC_DRAPING_BUILD_PYTHON)
+  find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+  find_package(pybind11 CONFIG REQUIRED)
 
-if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
-  add_executable(debug_drape_result
-    tools/debug_drape_result.cpp)
-  target_link_libraries(debug_drape_result
+  pybind11_add_module(_core
+    bindings/python/module.cpp)
+  target_link_libraries(_core
     PRIVATE
       geodesic_draping)
-  target_include_directories(debug_drape_result
+  install(TARGETS _core
+    LIBRARY DESTINATION geodesic_draping
+    RUNTIME DESTINATION geodesic_draping
+    COMPONENT python)
+endif()
+
+if(GEODESIC_DRAPING_BUILD_TOOLS)
+  add_executable(benchmark_drape
+    tools/benchmark_drape.cpp)
+  target_link_libraries(benchmark_drape
+    PRIVATE
+      geodesic_draping)
+  target_include_directories(benchmark_drape
     PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/tools)
-  target_compile_definitions(debug_drape_result
+  target_compile_definitions(benchmark_drape
     PRIVATE
       GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+
+  if(GEODESIC_DRAPING_ENABLE_POLYSCOPE)
+    add_executable(debug_drape_result
+      tools/debug_drape_result.cpp)
+    target_link_libraries(debug_drape_result
+      PRIVATE
+        geodesic_draping)
+    target_include_directories(debug_drape_result
+      PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+    target_compile_definitions(debug_drape_result
+      PRIVATE
+        GEODESIC_DRAPING_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test_data/fixtures")
+  endif()
 endif()

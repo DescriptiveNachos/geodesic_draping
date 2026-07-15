@@ -28,6 +28,154 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
   -DGEODESIC_DRAPING_ENABLE_POLYSCOPE=OFF
 ```
 
+## Python Install
+
+The Python package is built with `scikit-build-core` and exposes a NumPy-first
+API:
+
+Install a matching wheel from the GitHub release if one is available:
+
+```powershell
+python -m pip install geodesic_draping-0.1.0-cp312-cp312-win_amd64.whl
+```
+
+The first release provides Windows wheels for CPython 3.10, 3.11, and 3.12.
+Use the wheel whose `cp3xx` tag matches your Python version.
+
+To install from source:
+
+```powershell
+git clone --recurse-submodules https://github.com/DescriptiveNachos/geodesic_draping.git
+cd geodesic_draping
+python -m pip install .
+```
+
+For editable development installs:
+
+```powershell
+python -m pip install -e .[test]
+pytest tests/python
+```
+
+The Python extension is built from the same CMake target as the C++ library.
+Polyscope support in the C++ debug viewer is disabled for Python wheels by
+default.
+
+## Python API
+
+```python
+import numpy as np
+import geodesic_draping as gd
+
+vertices = np.asarray(..., dtype=float)  # shape (V, 3)
+faces = np.asarray(..., dtype=np.int64)  # shape (F, 3)
+
+result = gd.solve_drape(
+    vertices,
+    faces,
+    seed_xy=np.array([0.0, 0.0]),
+    fabric_angle=20.0,
+    mode="complete",
+    sample_vertex_shear=True,
+)
+
+print(result.distances.shape)
+print(result.vertex_shear.shape)
+```
+
+Use `GeoDrapeSolver` for repeated solves on the same mesh. This keeps the C++
+solver and its factorizations alive:
+
+```python
+solver = gd.GeoDrapeSolver(
+    vertices,
+    faces,
+    intrinsic_backend="integer",  # "signpost" or "integer"
+    refinement="none",            # "none", "flip", or "refine"
+)
+
+fast = solver.solve(
+    seed_xy=np.array([0.0, 0.0]),
+    fabric_angle=20.0,
+    mode="fast",
+)
+
+subdivision = solver.retrieve(retrieval="subdivision")
+print(subdivision.face_shear.shape)
+```
+
+Python v1 supports `retrieval="extrinsic"` and `"subdivision"`. Intrinsic
+retrieval and intrinsic solve inputs remain C++ API features for now.
+Face-domain quantities such as `face_shear` and `direction_fields` are returned
+on the subdivision domain; extrinsic retrieval returns original-mesh vertex
+quantities such as `distances` and optionally sampled `vertex_shear`.
+
+## Python v0.1 Scope
+
+Included:
+
+- Extrinsic XY seed input.
+- `fast`, `hybrid`, and `complete` solve modes.
+- `extrinsic` and `subdivision` retrieval domains.
+- `signpost` and `integer` intrinsic triangulation backends.
+- Optional intrinsic Delaunay flip/refine controls.
+
+Not yet exposed in Python:
+
+- Intrinsic seed/direction input.
+- Intrinsic retrieval.
+- Geometry Central-native object access.
+
+`DrapeResult` is a dataclass-style object with Python-owned NumPy arrays:
+
+```python
+result.vertices         # (V, 3)
+result.faces            # (F, 3)
+result.domain           # "extrinsic" or "subdivision"
+result.mode             # "fast", "hybrid", or "complete"
+result.generators       # [[family0_plus, family0_minus], [family1_plus, family1_minus]]
+result.direction_fields # None or (2, F, 3)
+result.distances        # None or (2, V)
+result.face_shear       # None or (F,)
+result.vertex_shear     # None or (V,)
+```
+
+Optional tool-side plotting:
+
+```powershell
+python -m pip install polyscope
+python tools/plot_drape_result.py
+```
+
+The script also exposes `plot_result(result)` if you want to import it from
+`tools/plot_drape_result.py` during local debugging.
+
+## Examples
+
+Small Python examples live in `examples/`:
+
+```powershell
+python examples/basic_solve.py
+python examples/persistent_solver.py
+```
+
+For a subdivision-domain Polyscope debug view:
+
+```powershell
+python -m pip install polyscope
+python examples/subdivision_debug_plot.py
+```
+
+## Build A Wheel
+
+```powershell
+python -m pip install scikit-build-core pybind11 numpy
+python -m pip wheel . --no-build-isolation -w dist
+```
+
+The project wheel should contain only the Python package, the compiled `_core`
+extension, and package metadata.
+
 ## Mesh Input
 
 ```cpp
@@ -283,4 +431,12 @@ To include subdivision retrieval cost:
 
 - The solver depends on Geometry Central.
 - Polyscope is only needed for the debug viewer.
-- The current C++ API is native-first. Python bindings are not included yet.
+- The C++ API is Geometry-Central-native internally; the Python API converts at
+  the package boundary to and from NumPy arrays.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 or later.
+See `LICENSE`.
+
+Geometry Central and Polyscope are MIT-licensed third-party dependencies.
