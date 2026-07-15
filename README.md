@@ -18,6 +18,8 @@ The main public header is:
 #include "geodesic_draping/geodrape.h"
 ```
 
+You can find example use case of this repo in https://github.com/DescriptiveNachos/geodesic_draping_visualizer which provides an interactive UI for visualizing the draping approximation on a mesh.
+
 # Python
 
 ## Python Install
