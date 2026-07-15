@@ -1,8 +1,16 @@
 # geodesic_draping
 
-C++ implementation of geodesic draping on triangle meshes. The solver traces
-two generator families, computes signed-heat direction fields, optionally
-integrates distances, and returns shear data on the requested mesh domain.
+Compute geodesic draping approximations on triangle meshes as described in https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6553829. The draping of a fabric is computed as the global crossing of two equidistant fiber families constrained by generators created as straightest geodesics from a drape origin and initial fiber directions.  
+
+While the paper used a python implementation with a customized potpourri3D fork, the present code implements the solver directly in C++ and makes it available through python bindings. This allows the solver core to use intrinsic triangulations which can improve robustness through intrinsic edge flips and refinement.
+
+The implementation supports different `intrinsic backends`, `retrieval domains` and `solve modes`. 
+The solver core computes the draping on intrinsic geomtry. There are multiple valid choices to represent this domain. We currently provide a choice between geometry-centrals `signpost` and `integer coordinates`. The former is faster, the later provides added robustness, which is especially valuable when using `intrinsic refinement`. 
+As the internal solver core works on intrinsic geometry there are multiple possible return domains. The direct return of the intrinsic domain is only available in C++. The bindings offer to return the result on the extrinsic input domain or the common subdivision of intrinsic and extrinsic domain. The former is the original input mesh, the latter also allows the return of face shear and direction fields.\
+For solve modes both C++ and bindings allow `Fast`, `Hybrid` and `Complete` solves. `Fast` computes face shear from signed-heat direction fields. Does not
+return distance fields. `Hybrid` computes face shear from signed-heat direction fields and also
+integrates vertex distance fields. `Complete` integrates vertex distance fields and computes shear from the
+complete solve path.\
 
 The main public header is:
 
@@ -10,43 +18,26 @@ The main public header is:
 #include "geodesic_draping/geodrape.h"
 ```
 
-## Build
-
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
-  -DGEODESIC_DRAPING_BUILD_TESTS=ON `
-  -DGEODESIC_DRAPING_ENABLE_POLYSCOPE=ON
-
-cmake --build build --config Release
-ctest --test-dir build --build-config Release --output-on-failure
-```
-
-Polyscope is optional. Disable it if you only need the library and benchmark:
-
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
-  -DGEODESIC_DRAPING_ENABLE_POLYSCOPE=OFF
-```
+# Python
 
 ## Python Install
 
-The Python package is built with `scikit-build-core` and exposes a NumPy-first
-API:
-
-Install a matching wheel from the GitHub release if one is available:
+The Python package is built with `scikit-build-core`, the simplest install is via one of the available wheels Download a matching wheel from the GitHub release if one is available. Check compatible tags with
+```powershell
+python -m pip debug --verbose
+```
+and install with:
 
 ```powershell
 python -m pip install geodesic_draping-0.1.0-cp312-cp312-win_amd64.whl
 ```
 
-The first release provides Windows wheels for CPython 3.10, 3.11, and 3.12.
-Use the wheel whose `cp3xx` tag matches your Python version.
-
 To install from source:
 
 ```powershell
-git clone --recurse-submodules https://github.com/DescriptiveNachos/geodesic_draping.git
+git clone https://github.com/DescriptiveNachos/geodesic_draping.git
 cd geodesic_draping
+git submodule update --init --recursive
 python -m pip install .
 ```
 
@@ -61,8 +52,26 @@ The Python extension is built from the same CMake target as the C++ library.
 Polyscope support in the C++ debug viewer is disabled for Python wheels by
 default.
 
+## Python Examples
+
+Small Python examples live in `examples/`, which show the basic usage and can be used as a quick install verification. To execute the examples just navigate to the repo root and run:
+
+```powershell
+python examples/basic_solve.py
+python examples/persistent_solver.py
+```
+
+For a Polyscope debug views use:
+
+```powershell
+python -m pip install polyscope
+python tools/plot_drape_result.py
+python examples/subdivision_debug_plot.py
+```
+
 ## Python API
 
+solve_drape() provides a convenience one-shot solver:
 ```python
 import numpy as np
 import geodesic_draping as gd
@@ -82,9 +91,22 @@ result = gd.solve_drape(
 print(result.distances.shape)
 print(result.vertex_shear.shape)
 ```
+`DrapeResult` is a dataclass-style object with Python-owned NumPy arrays:
+
+```python
+result.vertices         # (V, 3)
+result.faces            # (F, 3)
+result.domain           # "extrinsic" or "subdivision"
+result.mode             # "fast", "hybrid", or "complete"
+result.generators       # [[family0_plus, family0_minus], [family1_plus, family1_minus]]
+result.direction_fields # None or (2, F, 3)
+result.distances        # None or (2, V)
+result.face_shear       # None or (F,)
+result.vertex_shear     # None or (V,)
+```
 
 Use `GeoDrapeSolver` for repeated solves on the same mesh. This keeps the C++
-solver and its factorizations alive:
+solver and its factorizations alive and exelerates repeated solves drastically. 
 
 ```python
 solver = gd.GeoDrapeSolver(
@@ -104,68 +126,6 @@ subdivision = solver.retrieve(retrieval="subdivision")
 print(subdivision.face_shear.shape)
 ```
 
-Python v1 supports `retrieval="extrinsic"` and `"subdivision"`. Intrinsic
-retrieval and intrinsic solve inputs remain C++ API features for now.
-Face-domain quantities such as `face_shear` and `direction_fields` are returned
-on the subdivision domain; extrinsic retrieval returns original-mesh vertex
-quantities such as `distances` and optionally sampled `vertex_shear`.
-
-## Python v0.1 Scope
-
-Included:
-
-- Extrinsic XY seed input.
-- `fast`, `hybrid`, and `complete` solve modes.
-- `extrinsic` and `subdivision` retrieval domains.
-- `signpost` and `integer` intrinsic triangulation backends.
-- Optional intrinsic Delaunay flip/refine controls.
-
-Not yet exposed in Python:
-
-- Intrinsic seed/direction input.
-- Intrinsic retrieval.
-- Geometry Central-native object access.
-
-`DrapeResult` is a dataclass-style object with Python-owned NumPy arrays:
-
-```python
-result.vertices         # (V, 3)
-result.faces            # (F, 3)
-result.domain           # "extrinsic" or "subdivision"
-result.mode             # "fast", "hybrid", or "complete"
-result.generators       # [[family0_plus, family0_minus], [family1_plus, family1_minus]]
-result.direction_fields # None or (2, F, 3)
-result.distances        # None or (2, V)
-result.face_shear       # None or (F,)
-result.vertex_shear     # None or (V,)
-```
-
-Optional tool-side plotting:
-
-```powershell
-python -m pip install polyscope
-python tools/plot_drape_result.py
-```
-
-The script also exposes `plot_result(result)` if you want to import it from
-`tools/plot_drape_result.py` during local debugging.
-
-## Examples
-
-Small Python examples live in `examples/`:
-
-```powershell
-python examples/basic_solve.py
-python examples/persistent_solver.py
-```
-
-For a subdivision-domain Polyscope debug view:
-
-```powershell
-python -m pip install polyscope
-python examples/subdivision_debug_plot.py
-```
-
 ## Build A Wheel
 
 ```powershell
@@ -175,6 +135,55 @@ python -m pip wheel . --no-build-isolation -w dist
 
 The project wheel should contain only the Python package, the compiled `_core`
 extension, and package metadata.
+
+# C++
+
+## C++ Build
+
+Source builds from the Git repository require the Geometry Central submodule.
+Clone normally, then initialize Geometry Central:
+
+```powershell
+git clone https://github.com/DescriptiveNachos/geodesic_draping.git
+cd geodesic_draping
+git submodule update --init --recursive extern/geometry-central
+```
+
+If you want to use the debug plotting tests you will also need polyscope
+
+```powershell
+git submodule update --init --recursive extern/polyscope
+```
+
+The repo provides both basic tests and some tools for benchmarking and debug plots, disable anything you do not need, but make sure to enable polyscope if you want to use debug plotting tools. To get all provided tests and tools choose:
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+  -DGEODESIC_DRAPING_BUILD_TESTS=ON `
+  -DGEODESIC_DRAPING_BUILD_TOOLS=ON 
+  -DGEODESIC_DRAPING_ENABLE_POLYSCOPE=ON
+
+cmake --build build --config Release
+```
+If you enabled tests you may run the following to confirm a successful build:
+```powershell
+ctest --test-dir build --build-config Release --output-on-failure
+```
+If you also enabled tools and polyscope you can also run:
+```powershell
+.\build\Release\debug_drape_result.exe demo_part
+```
+and test the following useful options:
+
+```powershell
+--mode fast|hybrid|complete
+--domain extrinsic|subdivision
+--backend signpost|integer
+--refinement none|flip|refine
+--sample-vertex-shear
+```
+
+The active fixture is `test_data/fixtures/demo_part`.
 
 ## Mesh Input
 
@@ -228,8 +237,9 @@ geodesic_draping::DrapeResult result =
 After a solve, `solver.retrieve(retrievalOptions)` can retrieve the last core
 result in another domain.
 
-## Solve Modes
-
+## Modes & Options
+The solve behavior is configured with several option structs:\
+`DrapeSolveMode`:
 ```cpp
 enum class DrapeSolveMode {
   Fast,
@@ -237,16 +247,7 @@ enum class DrapeSolveMode {
   Complete,
 };
 ```
-
-- `Fast`: computes face shear from signed-heat direction fields. Does not
-  return distance fields.
-- `Hybrid`: computes face shear from signed-heat direction fields and also
-  integrates vertex distance fields.
-- `Complete`: integrates vertex distance fields and computes shear from the
-  complete solve path.
-
 `DrapeSolveOptions`:
-
 ```cpp
 struct DrapeSolveOptions {
   DrapeSolveMode mode = DrapeSolveMode::Complete;
@@ -254,11 +255,8 @@ struct DrapeSolveOptions {
   AdvancedSolveOptions advanced;
 };
 ```
-
-`fabricAngle` is passed to `solve()` / `solveDrape()`. `fiberAngle` is the
-second fabric-family angle relative to the first.
-
-## Retrieval Domains
+`fabricAngle` is the global fabric orientaion and passed to `solve()` / `solveDrape()`. `fiberAngle` is the
+second fabric-family angle relative to the first, the default 90 degrees corresponds to an orthotropic fabric.
 
 ```cpp
 enum class RetrievalDomain {
@@ -267,23 +265,13 @@ enum class RetrievalDomain {
   Subdivision,
 };
 ```
-
-- `Intrinsic`: returns data on the active intrinsic triangulation.
-- `Extrinsic`: returns data transferred to the original input mesh when
-  available.
-- `Subdivision`: returns data on the common subdivision of input and intrinsic
-  meshes. This is the best domain for debugging face fields after flips or
-  refinement.
-
 `RetrievalOptions`:
-
 ```cpp
 struct RetrievalOptions {
   RetrievalDomain domain = RetrievalDomain::Extrinsic;
   bool sampleVertexShear = false;
 };
 ```
-
 `sampleVertexShear` optionally samples primary face shear to vertices.
 
 ## Intrinsic Backend And Refinement
@@ -392,27 +380,9 @@ For `solveDrape()`, `DrapeResult::storageOwner` keeps solver-owned geometry
 alive. Keep the result object alive while using pointers or Geometry Central
 data views stored in it.
 
-## Debug Viewer
-
-When Polyscope is enabled:
-
-```powershell
-.\build\Release\debug_drape_result.exe demo_part --mode complete --domain subdivision
-```
-
-Useful options:
-
-```powershell
---mode fast|hybrid|complete
---domain extrinsic|subdivision
---backend signpost|integer
---refinement none|flip|refine
---sample-vertex-shear
-```
-
-The active fixture is `test_data/fixtures/demo_part`.
-
 ## Benchmark
+
+The repo also includes a very basic benchmark tool, which can be called like:
 
 ```powershell
 .\build\Release\benchmark_drape.exe demo_part --warmup-runs 1 --measured-runs 10
