@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from basic_solve import load_demo_part
+from demo_fixture import load_demo_part
 
 import geodesic_draping as gd
 

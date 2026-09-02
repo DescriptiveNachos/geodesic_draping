@@ -1,8 +1,11 @@
 from __future__ import annotations
-import json
 from pathlib import Path
+import sys
 import numpy as np
 import geodesic_draping as gd
+
+sys.path.append(str(Path(__file__).resolve().parents[1] / "examples"))
+from demo_fixture import load_demo_part
 
 def plot_result(result, *, show: bool = True):
     try:
@@ -43,21 +46,9 @@ def plot_result(result, *, show: bool = True):
     return mesh
 
 
-def _load_fixture(fixture_name):
-    fixture_dir = Path(__file__).resolve().parents[1] / "test_data" / "fixtures" / fixture_name
-    mesh = json.loads((fixture_dir / "mesh.json").read_text())
-    inputs = json.loads((fixture_dir / "inputs.json").read_text())
-    return mesh,inputs
-
-
 if __name__ == "__main__":
-    mesh, inputs = _load_fixture('demo_part')
+    vertices, faces, seed_xy, fabric_angle = load_demo_part()
 
-    vertices = np.asarray(mesh["vertices"], dtype=float)
-    faces = np.asarray(mesh["faces"], dtype=np.int64)
-    seed_xy = np.asarray(inputs["seed_xy"], dtype=float)
-    fabric_angle = float(inputs["angle_degrees"])
-    
     solver = gd.GeoDrapeSolver(vertices,faces,intrinsic_backend='signpost',refinement='flip')
     result = solver.solve(seed_xy,fabric_angle,mode='complete',retrieval='subdivision',sample_vertex_shear=True) 
 

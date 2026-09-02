@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
+import sys
 
 import numpy as np
 import pytest
@@ -9,18 +9,8 @@ import pytest
 import geodesic_draping
 from geodesic_draping import GeoDrapeSolver, solve_drape
 
-
-FIXTURE_DIR = Path(__file__).resolve().parents[2] / "test_data" / "fixtures" / "demo_part"
-
-
-def load_demo_part():
-    mesh = json.loads((FIXTURE_DIR / "mesh.json").read_text())
-    inputs = json.loads((FIXTURE_DIR / "inputs.json").read_text())
-    vertices = np.asarray(mesh["vertices"], dtype=np.float64)
-    faces = np.asarray(mesh["faces"], dtype=np.int64)
-    seed_xy = np.asarray(inputs["seed_xy"], dtype=np.float64)
-    fabric_angle = float(inputs["angle_degrees"])
-    return vertices, faces, seed_xy, fabric_angle
+sys.path.append(str(Path(__file__).resolve().parents[2] / "examples"))
+from demo_fixture import load_demo_part
 
 
 def test_public_api_surface():
