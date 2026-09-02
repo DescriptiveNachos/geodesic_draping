@@ -16,7 +16,7 @@ authors = [
 maintainers = [
   { name = "Doran Nettig", email = "doran.nettig@tuhh.de" },
 ]
-dependencies = ["numpy"]
+dependencies = ["numpy>=1.26,<2"]
 classifiers = [
   "Programming Language :: C++",
   "Programming Language :: Python :: 3",
