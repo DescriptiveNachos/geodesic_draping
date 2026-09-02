@@ -9,6 +9,10 @@ option(GEODESIC_DRAPING_BUILD_TOOLS "Build geodesic draping command-line tools" 
 option(GEODESIC_DRAPING_ENABLE_POLYSCOPE "Enable optional Polyscope plotting helpers" OFF)
 option(GEODESIC_DRAPING_BUILD_PYTHON "Build Python bindings" OFF)
 
+if(GEODESIC_DRAPING_BUILD_PYTHON)
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
