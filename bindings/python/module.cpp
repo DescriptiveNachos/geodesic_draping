@@ -94,12 +94,6 @@ gd::SignedHeatSolveOptions makeHeatOptions(bool preserveSourceNormals,
   return options;
 }
 
-gd::IntrinsicConstructionOptions makeIntrinsicOptions(const std::string& backend) {
-  gd::IntrinsicConstructionOptions options;
-  options.backend = gd::parseIntrinsicBackend(backend);
-  return options;
-}
-
 gd::RefinementOptions makeRefinementOptions(const std::string& refinement,
                                             std::optional<double> angleThreshold,
                                             std::optional<double> circumradiusThreshold,
@@ -307,7 +301,7 @@ public:
                                 levelSetConstraint,
                                 softLevelSetWeight,
                                 diffusionTimeCoefficient),
-                makeIntrinsicOptions(intrinsicBackend),
+                gd::parseIntrinsicBackend(intrinsicBackend),
                 makeRefinementOptions(refinement,
                                       angleThreshold,
                                       circumradiusThreshold,

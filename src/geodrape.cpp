@@ -7,21 +7,17 @@
 namespace geodesic_draping {
 
 GeoDrapeSolver::GeoDrapeSolver(SurfaceMeshData meshData,
-                               const SignedHeatSolveOptions& heatOptions)
-    : GeoDrapeSolver(std::move(meshData), heatOptions, {}, {}) {}
-
-GeoDrapeSolver::GeoDrapeSolver(SurfaceMeshData meshData,
                                const SignedHeatSolveOptions& heatOptions,
-                               const IntrinsicConstructionOptions& intrinsicOptions,
+                               IntrinsicTriangulationBackend intrinsicBackend,
                                const RefinementOptions& refinementOptions)
     : meshData_(std::move(meshData)),
       inputSurface_(makeGeometryCentralSurface(meshData_)),
       heatOptions_(heatOptions),
       inputConnectivityPreserved_(refinementOptions.mode == RefinementMode::None) {
   useCommonSubdivisionInputAdapter_ =
-      intrinsicOptions.backend == IntrinsicTriangulationBackend::IntegerCoordinates;
+      intrinsicBackend == IntrinsicTriangulationBackend::IntegerCoordinates;
   intrinsicTriangulation_ = makeIntrinsicTriangulation(
-      intrinsicOptions.backend,
+      intrinsicBackend,
       *inputSurface_.mesh,
       *inputSurface_.geometry);
   applyRefinement(*intrinsicTriangulation_, refinementOptions);

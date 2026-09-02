@@ -284,11 +284,6 @@ enum class IntrinsicTriangulationBackend {
   IntegerCoordinates,
 };
 
-struct IntrinsicConstructionOptions {
-  IntrinsicTriangulationBackend backend =
-      IntrinsicTriangulationBackend::Signpost;
-};
-
 enum class RefinementMode {
   None,
   DelaunayFlip,
@@ -303,20 +298,16 @@ struct RefinementOptions {
 };
 ```
 
-Constructor with explicit intrinsic options:
+Constructor with explicit intrinsic backend and refinement:
 
 ```cpp
-geodesic_draping::IntrinsicConstructionOptions intrinsicOptions;
-intrinsicOptions.backend =
-    geodesic_draping::IntrinsicTriangulationBackend::IntegerCoordinates;
-
 geodesic_draping::RefinementOptions refinementOptions;
 refinementOptions.mode = geodesic_draping::RefinementMode::DelaunayFlip;
 
 geodesic_draping::GeoDrapeSolver solver(
     meshData,
     geodesic_draping::SignedHeatSolveOptions{},
-    intrinsicOptions,
+    geodesic_draping::IntrinsicTriangulationBackend::IntegerCoordinates,
     refinementOptions);
 ```
 

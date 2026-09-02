@@ -40,10 +40,6 @@ enum class IntrinsicTriangulationBackend {
   IntegerCoordinates,
 };
 
-struct IntrinsicConstructionOptions {
-  IntrinsicTriangulationBackend backend = IntrinsicTriangulationBackend::Signpost;
-};
-
 struct RefinementOptions {
   RefinementMode mode = RefinementMode::None;
   std::optional<double> angleThreshold;
@@ -130,12 +126,11 @@ struct DrapeResult {
 
 class GeoDrapeSolver {
 public:
-  explicit GeoDrapeSolver(SurfaceMeshData meshData,
-                          const SignedHeatSolveOptions& heatOptions = {});
-  GeoDrapeSolver(SurfaceMeshData meshData,
-                 const SignedHeatSolveOptions& heatOptions,
-                 const IntrinsicConstructionOptions& intrinsicOptions,
-                 const RefinementOptions& refinementOptions = {});
+  explicit GeoDrapeSolver(
+      SurfaceMeshData meshData,
+      const SignedHeatSolveOptions& heatOptions = {},
+      IntrinsicTriangulationBackend intrinsicBackend = IntrinsicTriangulationBackend::Signpost,
+      const RefinementOptions& refinementOptions = {});
 
   DrapeResult solve(const Vec2& seedXY,
                     double fabricAngle,
@@ -182,7 +177,7 @@ DrapeResult solveDrape(SurfaceMeshData meshData,
                        const SignedHeatSolveOptions& heatOptions = {},
                        const DrapeSolveOptions& solveOptions = {},
                        const RetrievalOptions& retrievalOptions = {},
-                       const IntrinsicConstructionOptions& intrinsicOptions = {},
+                       IntrinsicTriangulationBackend intrinsicBackend = IntrinsicTriangulationBackend::Signpost,
                        const RefinementOptions& refinementOptions = {});
 
 } // namespace geodesic_draping

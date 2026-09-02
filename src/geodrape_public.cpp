@@ -64,12 +64,12 @@ DrapeResult solveDrape(SurfaceMeshData meshData,
                        const SignedHeatSolveOptions& heatOptions,
                        const DrapeSolveOptions& solveOptions,
                        const RetrievalOptions& retrievalOptions,
-                       const IntrinsicConstructionOptions& intrinsicOptions,
+                       IntrinsicTriangulationBackend intrinsicBackend,
                        const RefinementOptions& refinementOptions) {
   auto solver = std::make_shared<GeoDrapeSolver>(
       std::move(meshData),
       heatOptions,
-      intrinsicOptions,
+      intrinsicBackend,
       refinementOptions);
   DrapeResult result = solver->solve(seedXY, fabricAngle, solveOptions, retrievalOptions);
   result.storageOwner = solver;

@@ -173,7 +173,8 @@ int main(int argc, char** argv) {
     std::string fixtureName = "demo_part";
     geodesic_draping::DrapeSolveOptions solveOptions;
     geodesic_draping::RetrievalOptions retrievalOptions;
-    geodesic_draping::IntrinsicConstructionOptions intrinsicOptions;
+    geodesic_draping::IntrinsicTriangulationBackend intrinsicBackend =
+        geodesic_draping::IntrinsicTriangulationBackend::Signpost;
     geodesic_draping::RefinementOptions refinementOptions;
 
     solveOptions.mode = geodesic_draping::DrapeSolveMode::Complete;
@@ -193,7 +194,7 @@ int main(int argc, char** argv) {
         retrievalOptions.domain = parseDomain(argv[i]);
       } else if (arg == "--backend") {
         if (++i >= argc) throw std::runtime_error("--backend requires a value");
-        intrinsicOptions.backend = geodesic_draping::parseIntrinsicBackend(argv[i]);
+        intrinsicBackend = geodesic_draping::parseIntrinsicBackend(argv[i]);
       } else if (arg == "--refinement") {
         if (++i >= argc) throw std::runtime_error("--refinement requires a value");
         refinementOptions.mode = geodesic_draping::parseRefinementMode(argv[i]);
@@ -222,7 +223,7 @@ int main(int argc, char** argv) {
         {},
         solveOptions,
         retrievalOptions,
-        intrinsicOptions,
+        intrinsicBackend,
         refinementOptions);
 
     polyscope::init();
