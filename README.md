@@ -140,10 +140,10 @@ extension, and package metadata.
 
 ## Release Wheels
 
-GitHub Actions builds wheels with `cibuildwheel` on pushes, pull requests, and
-manual runs. Pushing a tag like `v0.1.0` publishes built wheels and the source
-distribution to PyPI. Configure PyPI trusted publishing for this repository
-before tagging a release.
+GitHub Actions builds wheels with `cibuildwheel` on tag pushes and manual runs.
+Pushing a tag like `v0.1.1` uploads built wheels and the source distribution as
+workflow artifacts. Download and test those artifacts before publishing them to
+PyPI with `twine`.
 
 # C++
 
