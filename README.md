@@ -138,6 +138,13 @@ python -m pip wheel . --no-build-isolation -w dist
 The project wheel should contain only the Python package, the compiled `_core`
 extension, and package metadata.
 
+## Release Wheels
+
+GitHub Actions builds wheels with `cibuildwheel` on pushes, pull requests, and
+manual runs. Pushing a tag like `v0.1.0` publishes built wheels and the source
+distribution to PyPI. Configure PyPI trusted publishing for this repository
+before tagging a release.
+
 # C++
 
 ## C++ Build
