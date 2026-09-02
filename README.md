@@ -31,7 +31,7 @@ python -m pip debug --verbose
 and install with:
 
 ```powershell
-python -m pip install geodesic_draping-0.1.0-cp312-cp312-win_amd64.whl
+python -m pip install geodesic_draping-0.1.1-cp312-cp312-win_amd64.whl
 ```
 
 To install from source:

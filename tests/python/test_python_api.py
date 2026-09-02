@@ -14,7 +14,7 @@ from demo_fixture import load_demo_part
 
 
 def test_public_api_surface():
-    assert geodesic_draping.__version__ == "0.1.0"
+    assert geodesic_draping.__version__ == "0.1.1"
     assert geodesic_draping.__all__ == [
         "DrapeResult",
         "GeoDrapeSolver",
