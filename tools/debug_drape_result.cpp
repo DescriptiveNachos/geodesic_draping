@@ -186,14 +186,6 @@ void addResultQuantities(polyscope::SurfaceMesh* mesh,
   }
 }
 
-geodesic_draping::SignedHeatSolveOptions fixtureHeatOptions() {
-  geodesic_draping::SignedHeatSolveOptions options;
-  options.preserveSourceNormals = false;
-  options.levelSetConstraint = geometrycentral::LevelSetConstraint::None;
-  options.softLevelSetWeight = -1.0;
-  return options;
-}
-
 } // namespace
 
 int main(int argc, char** argv) {
@@ -247,7 +239,7 @@ int main(int argc, char** argv) {
         meshData,
         seedXY,
         fabricAngle,
-        fixtureHeatOptions(),
+        {},
         solveOptions,
         retrievalOptions,
         intrinsicOptions,

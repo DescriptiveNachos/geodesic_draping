@@ -76,14 +76,6 @@ Options parseArgs(int argc, char** argv) {
   return options;
 }
 
-geodesic_draping::SignedHeatSolveOptions fixtureHeatOptions() {
-  geodesic_draping::SignedHeatSolveOptions options;
-  options.preserveSourceNormals = false;
-  options.levelSetConstraint = geometrycentral::LevelSetConstraint::None;
-  options.softLevelSetWeight = -1.0;
-  return options;
-}
-
 std::string modeName(geodesic_draping::DrapeSolveMode mode) {
   switch (mode) {
   case geodesic_draping::DrapeSolveMode::Fast:
@@ -207,7 +199,7 @@ int main(int argc, char** argv) {
         geodesic_draping::fixture_io::loadSeedXY(fixtureDir);
     const double fabricAngle =
         geodesic_draping::fixture_io::loadAngleDegrees(fixtureDir);
-    const geodesic_draping::SignedHeatSolveOptions heatOptions = fixtureHeatOptions();
+    const geodesic_draping::SignedHeatSolveOptions heatOptions;
 
     geodesic_draping::RetrievalOptions retrievalOptions;
     retrievalOptions.domain = options.retrievalDomain;

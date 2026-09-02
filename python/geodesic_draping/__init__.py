@@ -33,17 +33,7 @@ class DrapeResult:
         return cls(**data)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "vertices": self.vertices,
-            "faces": self.faces,
-            "domain": self.domain,
-            "mode": self.mode,
-            "generators": self.generators,
-            "direction_fields": self.direction_fields,
-            "distances": self.distances,
-            "face_shear": self.face_shear,
-            "vertex_shear": self.vertex_shear,
-        }
+        return vars(self).copy()
 
 
 class GeoDrapeSolver:
