@@ -1,4 +1,5 @@
 #include "geodesic_draping/geodrape.h"
+#include "geodesic_draping/strings.h"
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -22,59 +23,12 @@ namespace {
   throw py::error_already_set();
 }
 
-gd::DrapeSolveMode parseMode(const std::string& value) {
-  if (value == "fast") return gd::DrapeSolveMode::Fast;
-  if (value == "hybrid") return gd::DrapeSolveMode::Hybrid;
-  if (value == "complete") return gd::DrapeSolveMode::Complete;
-  throw py::value_error("mode must be one of: 'fast', 'hybrid', 'complete'");
-}
-
-std::string modeName(gd::DrapeSolveMode mode) {
-  switch (mode) {
-  case gd::DrapeSolveMode::Fast:
-    return "fast";
-  case gd::DrapeSolveMode::Hybrid:
-    return "hybrid";
-  case gd::DrapeSolveMode::Complete:
-    return "complete";
-  }
-  return "unknown";
-}
-
 gd::RetrievalDomain parseRetrieval(const std::string& value) {
-  if (value == "extrinsic") return gd::RetrievalDomain::Extrinsic;
-  if (value == "subdivision") return gd::RetrievalDomain::Subdivision;
   if (value == "intrinsic") {
     throwNotImplemented("retrieval='intrinsic' is not exposed in Python v1");
   }
+  if (value == "extrinsic" || value == "subdivision") return gd::parseRetrievalDomain(value);
   throw py::value_error("retrieval must be one of: 'extrinsic', 'subdivision'");
-}
-
-std::string domainName(gd::RetrievalDomain domain) {
-  switch (domain) {
-  case gd::RetrievalDomain::Intrinsic:
-    return "intrinsic";
-  case gd::RetrievalDomain::Extrinsic:
-    return "extrinsic";
-  case gd::RetrievalDomain::Subdivision:
-    return "subdivision";
-  }
-  return "unknown";
-}
-
-gd::IntrinsicTriangulationBackend parseBackend(const std::string& value) {
-  if (value == "signpost") return gd::IntrinsicTriangulationBackend::Signpost;
-  if (value == "integer" || value == "integer-coordinates") {
-    return gd::IntrinsicTriangulationBackend::IntegerCoordinates;
-  }
-  throw py::value_error("intrinsic_backend must be one of: 'signpost', 'integer'");
-}
-
-gd::RefinementMode parseRefinement(const std::string& value) {
-  if (value == "none") return gd::RefinementMode::None;
-  if (value == "flip") return gd::RefinementMode::DelaunayFlip;
-  if (value == "refine") return gd::RefinementMode::DelaunayRefine;
-  throw py::value_error("refinement must be one of: 'none', 'flip', 'refine'");
 }
 
 geometrycentral::LevelSetConstraint parseLevelSetConstraint(const std::string& value) {
@@ -142,7 +96,7 @@ gd::SignedHeatSolveOptions makeHeatOptions(bool preserveSourceNormals,
 
 gd::IntrinsicConstructionOptions makeIntrinsicOptions(const std::string& backend) {
   gd::IntrinsicConstructionOptions options;
-  options.backend = parseBackend(backend);
+  options.backend = gd::parseIntrinsicBackend(backend);
   return options;
 }
 
@@ -151,7 +105,7 @@ gd::RefinementOptions makeRefinementOptions(const std::string& refinement,
                                             std::optional<double> circumradiusThreshold,
                                             std::optional<size_t> maxInsertions) {
   gd::RefinementOptions options;
-  options.mode = parseRefinement(refinement);
+  options.mode = gd::parseRefinementMode(refinement);
   options.angleThreshold = angleThreshold;
   options.circumradiusThreshold = circumradiusThreshold;
   options.maxInsertions = maxInsertions;
@@ -163,7 +117,7 @@ gd::DrapeSolveOptions makeSolveOptions(const std::string& mode,
                                        std::optional<double> traceLength,
                                        std::optional<size_t> maxTraceIterations) {
   gd::DrapeSolveOptions options;
-  options.mode = parseMode(mode);
+  options.mode = gd::parseDrapeSolveMode(mode);
   options.fiberAngle = fiberAngle;
   options.advanced.trace.traceLength = traceLength;
   options.advanced.trace.maxIterations = maxTraceIterations;
@@ -317,8 +271,8 @@ py::dict resultDict(const gd::DrapeResult& result) {
   py::dict dict;
   dict["vertices"] = verticesArray(result);
   dict["faces"] = facesArray(result);
-  dict["domain"] = domainName(result.domain);
-  dict["mode"] = modeName(result.mode);
+  dict["domain"] = gd::retrievalDomainName(result.domain);
+  dict["mode"] = gd::drapeSolveModeName(result.mode);
   dict["generators"] = generatorArrays(result);
   dict["direction_fields"] = result.directionFields
                                   ? py::object(directionFieldsArray(*result.directionFields))

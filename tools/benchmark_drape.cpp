@@ -1,5 +1,6 @@
 #include "fixture_io.h"
 #include "geodesic_draping/geodrape.h"
+#include "geodesic_draping/strings.h"
 
 #include <algorithm>
 #include <chrono>
@@ -42,8 +43,9 @@ void printUsage(const char* argv0) {
 }
 
 geodesic_draping::RetrievalDomain parseDomain(const std::string& value) {
-  if (value == "extrinsic") return geodesic_draping::RetrievalDomain::Extrinsic;
-  if (value == "subdivision") return geodesic_draping::RetrievalDomain::Subdivision;
+  if (value == "extrinsic" || value == "subdivision") {
+    return geodesic_draping::parseRetrievalDomain(value);
+  }
   throw std::runtime_error("--domain must be one of: extrinsic, subdivision");
 }
 
@@ -74,30 +76,6 @@ Options parseArgs(int argc, char** argv) {
     throw std::runtime_error("--measured-runs must be greater than zero");
   }
   return options;
-}
-
-std::string modeName(geodesic_draping::DrapeSolveMode mode) {
-  switch (mode) {
-  case geodesic_draping::DrapeSolveMode::Fast:
-    return "fast";
-  case geodesic_draping::DrapeSolveMode::Hybrid:
-    return "hybrid";
-  case geodesic_draping::DrapeSolveMode::Complete:
-    return "complete";
-  }
-  return "unknown";
-}
-
-std::string domainName(geodesic_draping::RetrievalDomain domain) {
-  switch (domain) {
-  case geodesic_draping::RetrievalDomain::Intrinsic:
-    return "intrinsic";
-  case geodesic_draping::RetrievalDomain::Extrinsic:
-    return "extrinsic";
-  case geodesic_draping::RetrievalDomain::Subdivision:
-    return "subdivision";
-  }
-  return "unknown";
 }
 
 void consumeResult(const geodesic_draping::DrapeResult& result) {
@@ -207,7 +185,7 @@ int main(int argc, char** argv) {
     std::cout << "fixture: " << options.fixtureName
               << "  vertices: " << meshData.vertices.size()
               << "  faces: " << meshData.faces.size()
-              << "  domain: " << domainName(options.retrievalDomain)
+              << "  domain: " << geodesic_draping::retrievalDomainName(options.retrievalDomain)
               << "  warmups: " << options.warmupRuns
               << "  measured: " << options.measuredRuns << "\n\n";
     std::cout << std::left << std::setw(10) << "mode"
@@ -227,7 +205,7 @@ int main(int argc, char** argv) {
     for (geodesic_draping::DrapeSolveMode mode : modes) {
       geodesic_draping::DrapeSolveOptions solveOptions;
       solveOptions.mode = mode;
-      const std::string name = modeName(mode);
+      const std::string name = geodesic_draping::drapeSolveModeName(mode);
       printRow(name, "cold", stats(measureCold(
                          meshData,
                          seedXY,

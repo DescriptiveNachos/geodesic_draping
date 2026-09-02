@@ -1,5 +1,6 @@
 #include "fixture_io.h"
 #include "geodesic_draping/geodrape.h"
+#include "geodesic_draping/strings.h"
 
 #include "polyscope/curve_network.h"
 #include "polyscope/point_cloud.h"
@@ -36,32 +37,11 @@ Point3 toPoint(const geometrycentral::Vector3& p) {
   return {p.x, p.y, p.z};
 }
 
-geodesic_draping::DrapeSolveMode parseMode(const std::string& value) {
-  if (value == "fast") return geodesic_draping::DrapeSolveMode::Fast;
-  if (value == "hybrid") return geodesic_draping::DrapeSolveMode::Hybrid;
-  if (value == "complete") return geodesic_draping::DrapeSolveMode::Complete;
-  throw std::runtime_error("--mode must be one of: fast, hybrid, complete");
-}
-
 geodesic_draping::RetrievalDomain parseDomain(const std::string& value) {
-  if (value == "extrinsic") return geodesic_draping::RetrievalDomain::Extrinsic;
-  if (value == "subdivision") return geodesic_draping::RetrievalDomain::Subdivision;
-  throw std::runtime_error("--domain must be one of: extrinsic, subdivision");
-}
-
-geodesic_draping::IntrinsicTriangulationBackend parseBackend(const std::string& value) {
-  if (value == "signpost") return geodesic_draping::IntrinsicTriangulationBackend::Signpost;
-  if (value == "integer" || value == "integer-coordinates") {
-    return geodesic_draping::IntrinsicTriangulationBackend::IntegerCoordinates;
+  if (value == "extrinsic" || value == "subdivision") {
+    return geodesic_draping::parseRetrievalDomain(value);
   }
-  throw std::runtime_error("--backend must be one of: signpost, integer");
-}
-
-geodesic_draping::RefinementMode parseRefinement(const std::string& value) {
-  if (value == "none") return geodesic_draping::RefinementMode::None;
-  if (value == "flip") return geodesic_draping::RefinementMode::DelaunayFlip;
-  if (value == "refine") return geodesic_draping::RefinementMode::DelaunayRefine;
-  throw std::runtime_error("--refinement must be one of: none, flip, refine");
+  throw std::runtime_error("--domain must be one of: extrinsic, subdivision");
 }
 
 std::vector<Face3> faceIndices(const geodesic_draping::DrapeResult& result) {
@@ -207,16 +187,16 @@ int main(int argc, char** argv) {
       }
       if (arg == "--mode") {
         if (++i >= argc) throw std::runtime_error("--mode requires a value");
-        solveOptions.mode = parseMode(argv[i]);
+        solveOptions.mode = geodesic_draping::parseDrapeSolveMode(argv[i]);
       } else if (arg == "--domain") {
         if (++i >= argc) throw std::runtime_error("--domain requires a value");
         retrievalOptions.domain = parseDomain(argv[i]);
       } else if (arg == "--backend") {
         if (++i >= argc) throw std::runtime_error("--backend requires a value");
-        intrinsicOptions.backend = parseBackend(argv[i]);
+        intrinsicOptions.backend = geodesic_draping::parseIntrinsicBackend(argv[i]);
       } else if (arg == "--refinement") {
         if (++i >= argc) throw std::runtime_error("--refinement requires a value");
-        refinementOptions.mode = parseRefinement(argv[i]);
+        refinementOptions.mode = geodesic_draping::parseRefinementMode(argv[i]);
       } else if (arg == "--sample-vertex-shear") {
         retrievalOptions.sampleVertexShear = true;
       } else if (arg.rfind("--", 0) == 0) {
