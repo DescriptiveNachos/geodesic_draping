@@ -254,7 +254,7 @@ enum class DrapeSolveMode {
 struct DrapeSolveOptions {
   DrapeSolveMode mode = DrapeSolveMode::Complete;
   double fiberAngle = 90.0;
-  AdvancedSolveOptions advanced;
+  AdvancedTraceOptions trace;
 };
 ```
 `fabricAngle` is the global fabric orientaion and passed to `solve()` / `solveDrape()`. `fiberAngle` is the

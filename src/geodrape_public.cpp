@@ -12,7 +12,7 @@ DrapeResult GeoDrapeSolver::solve(const Vec2& seedXY,
                                   double fabricAngle,
                                   const DrapeSolveOptions& solveOptions,
                                   const RetrievalOptions& retrievalOptions) {
-  const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
+  const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.trace);
   const IntrinsicSolveInput input = adaptExtrinsicInput(
       seedXY,
       fabricAngle,
@@ -28,7 +28,7 @@ DrapeResult GeoDrapeSolver::solveFromIntrinsic(
     const geometrycentral::surface::BarycentricVector& fabricDirection,
     const DrapeSolveOptions& solveOptions,
     const RetrievalOptions& retrievalOptions) {
-  const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.advanced.trace);
+  const TraceSettings trace = resolveTraceSettings(traceDefaults_, solveOptions.trace);
   const IntrinsicSolveInput input = adaptIntrinsicInput(seed, fabricDirection, solveOptions, trace);
   lastIntrinsicResult_ = solveCore(input);
   return retrieve(retrievalOptions);

@@ -56,10 +56,6 @@ struct AdvancedTraceOptions {
   std::optional<size_t> maxIterations;
 };
 
-struct AdvancedSolveOptions {
-  AdvancedTraceOptions trace;
-};
-
 struct TraceSettings {
   double traceLength = 10000.0;
   size_t maxIterations = geometrycentral::INVALID_IND;
@@ -68,7 +64,7 @@ struct TraceSettings {
 struct DrapeSolveOptions {
   DrapeSolveMode mode = DrapeSolveMode::Complete;
   double fiberAngle = 90.0;
-  AdvancedSolveOptions advanced;
+  AdvancedTraceOptions trace;
 };
 
 struct RetrievalOptions {

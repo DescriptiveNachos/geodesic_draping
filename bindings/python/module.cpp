@@ -119,8 +119,8 @@ gd::DrapeSolveOptions makeSolveOptions(const std::string& mode,
   gd::DrapeSolveOptions options;
   options.mode = gd::parseDrapeSolveMode(mode);
   options.fiberAngle = fiberAngle;
-  options.advanced.trace.traceLength = traceLength;
-  options.advanced.trace.maxIterations = maxTraceIterations;
+  options.trace.traceLength = traceLength;
+  options.trace.maxIterations = maxTraceIterations;
   return options;
 }
 
