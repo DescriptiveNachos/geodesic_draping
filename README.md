@@ -1,56 +1,39 @@
 # geodesic_draping
 
-Compute geodesic draping approximations on triangle meshes as described in `Instant geodesic draping for optimization and path-planning and its application to incremental composite sheet forming`[https://www.sciencedirect.com/science/article/pii/S0010448526001259]. The draping of a fabric is computed as the global crossing of two equidistant fiber families constrained by generators created as straightest geodesics from a drape origin and initial fiber directions.  
+Compute geodesic draping approximations on triangle meshes as described in [Instant geodesic draping for optimization and path-planning and its application to incremental composite sheet forming](https://www.sciencedirect.com/science/article/pii/S0010448526001259). The draping of a fabric is computed as the global crossing of two equidistant fiber families constrained by generators created as straightest geodesics from a drape origin and initial fiber directions.  
 
 While the paper used a python implementation with a customized potpourri3D fork, the present code implements the solver directly in C++ and makes it available through python bindings. This allows the solver core to use intrinsic triangulations which can improve robustness through intrinsic edge flips and refinement.
 
+# Advanced Features
+
+If you just want to see it work first skip to `Quick Python Install`.
+
+Some of the options provided might sound a bit obscure and are not elaborated extensively in the paper so they are shortly introduced here:
 The implementation supports different `intrinsic backends`, `retrieval domains` and `solve modes`. 
-The solver core computes the draping on intrinsic geomtry. There are multiple valid choices to represent this domain. We currently provide a choice between geometry-centrals `signpost` and `integer coordinates`. The former is faster, the later provides added robustness, which is especially valuable when using `intrinsic refinement`. 
-As the internal solver core works on intrinsic geometry there are multiple possible return domains. The direct return of the intrinsic domain is only available in C++. The bindings offer to return the result on the extrinsic input domain or the common subdivision of intrinsic and extrinsic domain. The former is the original input mesh, the latter also allows the return of face shear and direction fields.\
-For solve modes both C++ and bindings allow `Fast`, `Hybrid` and `Complete` solves. `Fast` computes face shear from signed-heat direction fields. Does not
+The solver core computes the draping on intrinsic geomtry. There are multiple valid choices to represent this domain. We currently provide a choice between geometry-centrals `Signpost` and `Integer Coordinates`. The former is faster, the later provides added robustness, which is especially valuable when using `intrinsic refinement`. We refer you to the [geometry-central docs](https://geometry-central.net/surface/intrinsic_triangulations/basics/) for a more in depth explanation.
+As the internal solver core works on intrinsic geometry there are multiple possible return domains. The direct return of the `intrinsic domain` is only available in C++. The bindings offer to return the result on the `extrinsic input domain` or the `common subdivision` of intrinsic and extrinsic domain. The former is the original input mesh, the latter also allows the return of face shear and direction fields.\
+For solve modes both C++ and bindings allow `Fast`, `Hybrid` and `Complete` solves. `Fast` computes face shear from signed-heat direction fields and does not
 return distance fields. `Hybrid` computes face shear from signed-heat direction fields and also
 integrates vertex distance fields. `Complete` integrates vertex distance fields and computes shear from the
-complete solve path.\
-
-The main public header is:
-
-```cpp
-#include "geodesic_draping/geodrape.h"
-```
-
-You can find example use case of this repo in https://github.com/DescriptiveNachos/geodesic_draping_visualizer which provides an interactive UI for visualizing the draping approximation on a mesh.
+complete solve path, i.e. computing the gradients of the integrated distance fields.\
+If you just want to compute shear and your mesh does not need refinement `signpost` with `extrinsic` retrieval and the `Fast` solver is probably best.\
+If you need refinement `Integer Coordinates` robustness is propably helpfull.\
+Use `common subdivision` only if you care about face data, especially the direction fields.\
+For fiber tow locations / distance fields use `Hybrid`, `Complete` is mostly for curious comparisons. 
 
 # Python
 
-## Python Install
+## Quick Python Install
 
-The Python package is available on PyPI:
+The Python package is available on PyPI, just run:
 
 ```powershell
 python -m pip install geodesic-draping
 ```
 
-To install from source:
-
-```powershell
-git clone https://github.com/DescriptiveNachos/geodesic_draping.git
-cd geodesic_draping
-git submodule update --init --recursive
-python -m pip install .
-```
-
-For editable development installs:
-
-```powershell
-python -m pip install -e .[test]
-pytest tests/python
-```
-
-The Python extension is built from the same CMake target as the C++ library.
-Polyscope support in the C++ debug viewer is disabled for Python wheels by
-default.
-
 ## Python Examples
+
+### Basic Examples
 
 Small Python examples live in `examples/`, which show the basic usage and can be used as a quick install verification. To execute the examples just navigate to the repo root and run:
 
@@ -66,6 +49,10 @@ python -m pip install polyscope
 python tools/plot_drape_result.py
 python examples/subdivision_debug_plot.py
 ```
+
+### Additional Ressources
+
+You can find more elaborate example use casees in two small external repos: The firs is a [Visualizer](https://github.com/DescriptiveNachos/geodesic_draping_visualizer) which provides an interactive UI for visualizing the draping approximation on a mesh. The second is an [Opimization Demo](https://github.com/DescriptiveNachos/geodesic_draping_optimizer) which provides a basic dynamic GUI for a drape origin optimization. 
 
 ## Python API
 
@@ -124,7 +111,32 @@ subdivision = solver.retrieve(retrieval="subdivision")
 print(subdivision.face_shear.shape)
 ```
 
+## Build from Source
+
+To install from source:
+
+```powershell
+git clone https://github.com/DescriptiveNachos/geodesic_draping.git
+cd geodesic_draping
+git submodule update --init --recursive
+python -m pip install .
+```
+
+For editable development installs:
+
+```powershell
+python -m pip install -e .[test]
+pytest tests/python
+```
+
+The Python extension is built from the same CMake target as the C++ library.
+Polyscope support in the C++ debug viewer is disabled for Python wheels by
+default.
+
 ## Build A Wheel
+
+Release wheels are automatically build with `cibuildwheel` on all tagged versions starting from `v0.1.1`. 
+Wheels are build for mac, linux and windows and python 3.10-3.12 for now. If you want to build your own wheel do: 
 
 ```powershell
 python -m pip install scikit-build-core pybind11 numpy
@@ -134,14 +146,14 @@ python -m pip wheel . --no-build-isolation -w dist
 The project wheel should contain only the Python package, the compiled `_core`
 extension, and package metadata.
 
-## Release Wheels
-
-GitHub Actions builds wheels with `cibuildwheel` on tag pushes and manual runs.
-Pushing a tag like `v0.1.1` uploads built wheels and the source distribution as
-workflow artifacts. Download and test those artifacts before publishing them to
-PyPI with `twine`.
-
 # C++
+
+`DISCLAIMER`: I currently mostly use the python bindings, so consider the C++ API although more powerfull also less intensely tested for now 
+
+The main public header is:
+```cpp
+#include "geodesic_draping/geodrape.h"
+```
 
 ## C++ Build
 
