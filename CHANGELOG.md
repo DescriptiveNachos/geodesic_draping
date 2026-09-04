@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.1.1 - Unreleased
+## 0.1.2 - 2026-09-04
+
+- Prepared first public GitHub release.
+- Kept Python API surface stable.
+
+## 0.1.1 - 2026-09-02
 
 - Added GitHub Actions wheel artifact builds.
 - Simplified C++ option types and shared enum string helpers.

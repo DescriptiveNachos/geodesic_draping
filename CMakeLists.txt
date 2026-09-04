@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(geodesic_draping
-  VERSION 0.1.1
+  VERSION 0.1.2
   LANGUAGES CXX)
 
 option(GEODESIC_DRAPING_BUILD_TESTS "Build geodesic draping tests" OFF)
