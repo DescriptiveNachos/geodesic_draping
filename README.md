@@ -1,6 +1,6 @@
 # geodesic_draping
 
-Compute geodesic draping approximations on triangle meshes as described in https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6553829. The draping of a fabric is computed as the global crossing of two equidistant fiber families constrained by generators created as straightest geodesics from a drape origin and initial fiber directions.  
+Compute geodesic draping approximations on triangle meshes as described in `Instant geodesic draping for optimization and path-planning and its application to incremental composite sheet forming`[https://www.sciencedirect.com/science/article/pii/S0010448526001259]. The draping of a fabric is computed as the global crossing of two equidistant fiber families constrained by generators created as straightest geodesics from a drape origin and initial fiber directions.  
 
 While the paper used a python implementation with a customized potpourri3D fork, the present code implements the solver directly in C++ and makes it available through python bindings. This allows the solver core to use intrinsic triangulations which can improve robustness through intrinsic edge flips and refinement.
 
@@ -24,14 +24,10 @@ You can find example use case of this repo in https://github.com/DescriptiveNach
 
 ## Python Install
 
-The Python package is built with `scikit-build-core`, the simplest install is via one of the available wheels Download a matching wheel from the GitHub release if one is available. Check compatible tags with
-```powershell
-python -m pip debug --verbose
-```
-and install with:
+The Python package is available on PyPI:
 
 ```powershell
-python -m pip install geodesic_draping-0.1.1-cp312-cp312-win_amd64.whl
+python -m pip install geodesic-draping
 ```
 
 To install from source:
