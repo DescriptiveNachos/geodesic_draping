@@ -4,20 +4,23 @@ Compute geodesic draping approximations on triangle meshes as described in [Inst
 
 While the paper used a python implementation with a customized potpourri3D fork, the present code implements the solver directly in C++ and makes it available through python bindings. This allows the solver core to use intrinsic triangulations which can improve robustness through intrinsic edge flips and refinement.
 
+```DISCLAIMER```: Still kind of in 'beta' release until more 'field testing' is done. Everything should work as intended, but maybe do not rely on it yet.
+
 # Advanced Features
 
 If you just want to see it work first skip to `Quick Python Install`.
 
 Some of the options provided might sound a bit obscure and are not elaborated extensively in the paper so they are shortly introduced here:
+
 The implementation supports different `intrinsic backends`, `retrieval domains` and `solve modes`. 
-The solver core computes the draping on intrinsic geomtry. There are multiple valid choices to represent this domain. We currently provide a choice between geometry-centrals `Signpost` and `Integer Coordinates`. The former is faster, the later provides added robustness, which is especially valuable when using `intrinsic refinement`. We refer you to the [geometry-central docs](https://geometry-central.net/surface/intrinsic_triangulations/basics/) for a more in depth explanation.
+The solver core computes the draping on intrinsic geometry. There are multiple valid choices to represent this domain. We currently provide a choice between geometry-centrals `Signpost` and `Integer Coordinates`. The former is faster, the latter provides added robustness, which is especially valuable when using `intrinsic refinement`. We refer you to the [geometry-central docs](https://geometry-central.net/surface/intrinsic_triangulations/basics/) for a more in depth explanation.
 As the internal solver core works on intrinsic geometry there are multiple possible return domains. The direct return of the `intrinsic domain` is only available in C++. The bindings offer to return the result on the `extrinsic input domain` or the `common subdivision` of intrinsic and extrinsic domain. The former is the original input mesh, the latter also allows the return of face shear and direction fields.\
 For solve modes both C++ and bindings allow `Fast`, `Hybrid` and `Complete` solves. `Fast` computes face shear from signed-heat direction fields and does not
 return distance fields. `Hybrid` computes face shear from signed-heat direction fields and also
 integrates vertex distance fields. `Complete` integrates vertex distance fields and computes shear from the
 complete solve path, i.e. computing the gradients of the integrated distance fields.\
 If you just want to compute shear and your mesh does not need refinement `signpost` with `extrinsic` retrieval and the `Fast` solver is probably best.\
-If you need refinement `Integer Coordinates` robustness is propably helpfull.\
+If you need refinement `Integer Coordinates` robustness is probably helpful.\
 Use `common subdivision` only if you care about face data, especially the direction fields.\
 For fiber tow locations / distance fields use `Hybrid`, `Complete` is mostly for curious comparisons. 
 
@@ -50,9 +53,9 @@ python tools/plot_drape_result.py
 python examples/subdivision_debug_plot.py
 ```
 
-### Additional Ressources
+### Additional Resources
 
-You can find more elaborate example use casees in two small external repos: The firs is a [Visualizer](https://github.com/DescriptiveNachos/geodesic_draping_visualizer) which provides an interactive UI for visualizing the draping approximation on a mesh. The second is an [Opimization Demo](https://github.com/DescriptiveNachos/geodesic_draping_optimizer) which provides a basic dynamic GUI for a drape origin optimization. 
+You can find more elaborate example use cases in two small external repos: The first is a [Visualizer](https://github.com/DescriptiveNachos/geodesic_draping_visualizer) which provides an interactive UI for visualizing the draping approximation on a mesh. The second is an [Optimization Demo](https://github.com/DescriptiveNachos/geodesic_draping_optimizer) which provides a basic dynamic GUI for a drape origin optimization. 
 
 ## Python API
 
@@ -91,7 +94,7 @@ result.vertex_shear     # None or (V,)
 ```
 
 Use `GeoDrapeSolver` for repeated solves on the same mesh. This keeps the C++
-solver and its factorizations alive and exelerates repeated solves drastically. 
+solver and its factorizations alive and accelerates repeated solves drastically. 
 
 ```python
 solver = gd.GeoDrapeSolver(
@@ -135,8 +138,8 @@ default.
 
 ## Build A Wheel
 
-Release wheels are automatically build with `cibuildwheel` on all tagged versions starting from `v0.1.1`. 
-Wheels are build for mac, linux and windows and python 3.10-3.12 for now. If you want to build your own wheel do: 
+Release wheels are automatically built with `cibuildwheel` on all tagged versions starting from `v0.1.1`. 
+Wheels are built for mac, linux and windows and python 3.10-3.12 for now. If you want to build your own wheel do: 
 
 ```powershell
 python -m pip install scikit-build-core pybind11 numpy
@@ -148,7 +151,7 @@ extension, and package metadata.
 
 # C++
 
-`DISCLAIMER`: I currently mostly use the python bindings, so consider the C++ API although more powerfull also less intensely tested for now 
+`DISCLAIMER`: I currently mostly use the python bindings, so consider the C++ API although more powerful also less intensely tested for now 
 
 The main public header is:
 ```cpp
@@ -272,7 +275,7 @@ struct DrapeSolveOptions {
   AdvancedTraceOptions trace;
 };
 ```
-`fabricAngle` is the global fabric orientaion and passed to `solve()` / `solveDrape()`. `fiberAngle` is the
+`fabricAngle` is the global fabric orientation and passed to `solve()` / `solveDrape()`. `fiberAngle` is the
 second fabric-family angle relative to the first, the default 90 degrees corresponds to an orthotropic fabric.
 
 ```cpp
